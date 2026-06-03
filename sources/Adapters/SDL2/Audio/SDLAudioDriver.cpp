@@ -179,6 +179,15 @@ void SDLAudioDriver::OnChunkDone(Uint8 *stream, int len) {
             SYS_MEMCPY(mainBuffer_+bufferSize_-bufferPos_, miniBlank_, fragSize_);
             bufferSize_=bufferSize_-bufferPos_+fragSize_ ;
             bufferPos_ = 0;
+            // UNDERRUN RECOVERY: still wake the worker so it keeps producing and
+            // refills the pool. Without this, a single underrun leaves the worker
+            // asleep forever (it's only notified on real-buffer consumes) -> the
+            // pool never refills -> playback stalls permanently after a few
+            // seconds of marginal overload. We deliberately do NOT tick the
+            // engine / flush MIDI here (that stays on the real-buffer path),
+            // which keeps 1 produce per 1 consume = realtime, no runaway.
+            if (thread_)
+                thread_->Notify();
         } else {
 
             memcpy(mainBuffer_ + bufferSize_ - bufferPos_,
