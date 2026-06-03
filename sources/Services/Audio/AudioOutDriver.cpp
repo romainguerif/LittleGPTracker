@@ -3,6 +3,7 @@
 #include "Application/Model/Project.h"
 #include "Application/Player/SyncMaster.h" // Should be installable
 #include "AudioDriver.h"
+#include "Delay.h"
 #include "Services/Time/TimeService.h"
 #include "System/Console/Trace.h"
 #include "System/System/System.h"
@@ -24,6 +25,7 @@ AudioOutDriver::~AudioOutDriver() {
 bool AudioOutDriver::Init() {
 	primarySoundBuffer_=(fixed *)SYS_MALLOC(MIX_BUFFER_SIZE*sizeof(fixed)/2) ;
 	mixBuffer_=(short *)SYS_MALLOC(MIX_BUFFER_SIZE) ;
+	Delay::GetInstance()->Init() ;
     return driver_->Init();
 } ;
 
@@ -48,6 +50,13 @@ void AudioOutDriver::Trigger() {
 
     prepareMixBuffers();
     hasSound_=AudioMixer::Render(primarySoundBuffer_,sampleCount_) ;
+    // Feed silence to the delay when the mix is empty so its tail rings out.
+    if (!hasSound_) {
+        SYS_MEMSET(primarySoundBuffer_,0,sampleCount_*2*sizeof(fixed)) ;
+    }
+    if (Delay::GetInstance()->process(primarySoundBuffer_,sampleCount_)) {
+        hasSound_=true ;
+    }
     clipToMix();
     driver_->AddBuffer(mixBuffer_,sampleCount_) ;
 }

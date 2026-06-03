@@ -271,7 +271,7 @@ COMMONFILES := \
 	InstrumentBank.o WavFileWriter.o WavFile.o MidiInstrument.o Filters.o SampleVariable.o SampleInstrument.o SamplePool.o CommandList.o FxPrinter.o\
 	PersistencyService.o Persistent.o \
 	Observable.o SingletonRegistry.o \
-	Audio.o AudioMixer.o AudioOutDriver.o AudioDriver.o \
+	Audio.o AudioMixer.o AudioOutDriver.o AudioDriver.o Delay.o \
 	AudioOut.o \
 	DummyAudioOut.o PlayerChannel.o AudioFileStreamer.o \
 	MixBus.o \
