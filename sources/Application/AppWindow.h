@@ -39,6 +39,10 @@ class AppWindow : public GUIWindow, I_Observer, Status {
     void SetDirty();
     // Apply a built-in colour theme (index into Theme.h's themeColors).
     static void ApplyTheme(int index);
+    // Global (app-wide) theme persistence: survives restarts, independent of any
+    // project. Stored in a small file next to the user's tracks.
+    static int GetSavedTheme();   // -1 if none saved
+    static void SaveTheme(int index);
 
   protected: // GUIWindow implementation
     virtual bool onEvent(GUIEvent &event);

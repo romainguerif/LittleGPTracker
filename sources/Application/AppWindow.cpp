@@ -14,7 +14,9 @@
 #include "Services/Midi/MidiService.h"
 #include "System/Console/Trace.h"
 #include "UIFramework/Interfaces/I_GUIWindowFactory.h"
+#include "System/FileSystem/FileSystem.h"
 #include "Views/UIController.h"
+#include <stdio.h>
 #include <string.h>
 
 AppWindow *instance = 0;
@@ -87,6 +89,52 @@ void AppWindow::ApplyTheme(int index) {
     majorbeatColor_ = GUIColor(t.beat[0], t.beat[1], t.beat[2]);
 }
 
+// Path to the global theme file: kept next to the user's tracks (ROOTFOLDER) so
+// it persists with their data and is writable on the device. Falls back to the
+// working directory when ROOTFOLDER isn't configured (e.g. desktop builds).
+static void themeFilePath(char *out, int size) {
+    const char *root = Config::GetInstance()->GetValue("ROOTFOLDER");
+    if (root && root[0]) {
+        snprintf(out, size, "%slgpt.theme", root);
+    } else {
+        snprintf(out, size, "lgpt.theme");
+    }
+}
+
+int AppWindow::GetSavedTheme() {
+    char path[1024];
+    themeFilePath(path, sizeof(path));
+    char mode[2] = "r";
+    I_File *f = FileSystem::GetInstance()->Open(path, mode);
+    if (!f) {
+        return -1;
+    }
+    int t = -1;
+    f->Read(&t, sizeof(int), 1);
+    f->Close();
+    delete f;
+    if (t < 0 || t >= THEME_COUNT) {
+        return -1;
+    }
+    return t;
+}
+
+void AppWindow::SaveTheme(int index) {
+    if (index < 0 || index >= THEME_COUNT) {
+        return;
+    }
+    char path[1024];
+    themeFilePath(path, sizeof(path));
+    char mode[2] = "w";
+    I_File *f = FileSystem::GetInstance()->Open(path, mode);
+    if (!f) {
+        return;
+    }
+    f->Write(&index, sizeof(int), 1);
+    f->Close();
+    delete f;
+}
+
 AppWindow::AppWindow(I_GUIWindowImp &imp) : GUIWindow(imp) {
 
     instance = this;
@@ -137,6 +185,16 @@ AppWindow::AppWindow(I_GUIWindowImp &imp) : GUIWindow(imp) {
     defineColor("ROWCOLOR1", rownumberColor_);
     defineColor("ROWCOLOR2", rownumber2Color_);
     defineColor("MAJORBEAT", majorbeatColor_);
+
+    // Apply the globally-saved theme (if any) right away, so it persists across
+    // restarts and is in effect even on the project-selection screen, before any
+    // project is loaded.
+    {
+        int savedTheme = GetSavedTheme();
+        if (savedTheme >= 0) {
+            ApplyTheme(savedTheme);
+        }
+    }
 
     GUIWindow::Clear(backgroundColor_);
 
@@ -418,10 +476,18 @@ void AppWindow::LoadProject(const Path &p) {
     _mixerView = new MixerView((*this), _viewData);
     _mixerView->AddObserver(*this);
 
-    // Apply the project's saved colour theme before the first draw.
-    Variable *themeVar = project->FindVariable(VAR_THEME);
-    if (themeVar) {
-        ApplyTheme(themeVar->GetInt());
+    // Theme is a GLOBAL setting (persists across restarts, independent of the
+    // project). Apply it here too and reflect it in the project's Theme field so
+    // loading a project never changes the user's chosen theme.
+    {
+        int gt = GetSavedTheme();
+        if (gt >= 0) {
+            Variable *themeVar = project->FindVariable(VAR_THEME);
+            if (themeVar) {
+                themeVar->SetInt(gt);
+            }
+            ApplyTheme(gt);
+        }
     }
 
     _currentView = _songView;

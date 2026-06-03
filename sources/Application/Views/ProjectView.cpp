@@ -109,7 +109,10 @@ ProjectView::ProjectView(GUIWindow &w,ViewData *data):FieldView(w,data) {
 
 	project_=data->project_ ;
 
+	// Theme is a global app setting: seed the field from the saved global theme.
 	Variable *themeV=project_->FindVariable(VAR_THEME) ;
+	int savedTheme = AppWindow::GetSavedTheme() ;
+	if (savedTheme >= 0 && themeV) themeV->SetInt(savedTheme) ;
 	lastTheme_ = themeV ? themeV->GetInt() : 0 ;
 
 	GUIPoint position=GetAnchor() ;
@@ -228,6 +231,7 @@ void ProjectView::ProcessButtonMask(unsigned short mask,bool pressed) {
     if (themeV && themeV->GetInt() != lastTheme_) {
         lastTheme_ = themeV->GetInt();
         AppWindow::ApplyTheme(lastTheme_);
+        AppWindow::SaveTheme(lastTheme_); // persist globally (survives restarts)
         isDirty_ = true;
     }
 
