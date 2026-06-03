@@ -7,6 +7,7 @@
 #include "Groove.h"
 #include "Scale.h"
 #include "Services/Midi/MidiService.h"
+#include "Services/Audio/Delay.h"
 #include "System/Console/Trace.h"
 #include "System/FileSystem/FileSystem.h"
 #include "System/io/Status.h"
@@ -14,6 +15,30 @@
 
 #include "ProjectDatas.h"
 #include <math.h>
+#include <string.h>
+
+// The global dub-delay bus settings live on the Delay singleton; we persist
+// them alongside the project so each song restores its own delay.
+static Variable *delayBusVars(int i) {
+	Delay *dly=Delay::GetInstance() ;
+	switch (i) {
+		case 0: return dly->onVar_ ;
+		case 1: return dly->timeVar_ ;
+		case 2: return dly->feedbackVar_ ;
+		case 3: return dly->toneVar_ ;
+		case 4: return dly->wetVar_ ;
+		case 5: return dly->pingpongVar_ ;
+	}
+	return 0 ;
+}
+static Variable *findDelayBusVar(const char *name) {
+	if (!name) return 0 ;
+	for (int i=0;i<6;i++) {
+		Variable *v=delayBusVars(i) ;
+		if (v && strcmp(name,v->GetName())==0) return v ;
+	}
+	return 0 ;
+}
 
 Project::Project()
 :Persistent("PROJECT")
@@ -327,6 +352,7 @@ void Project::RestoreContent(TiXmlElement *element) {
 		const char *name=current->Attribute("NAME") ;
 		const char *value=current->Attribute("VALUE") ;
 		Variable *v=FindVariable(name) ;
+		if (!v) v=findDelayBusVar(name) ; // global dub-delay bus settings
 		if (v) {
 			v->SetString(value) ;
 		} ;
@@ -356,6 +382,15 @@ void Project::SaveContent(TiXmlNode *node) {
 		Variable v=it->CurrentItem() ;
 		param.SetAttribute("NAME",v.GetName()) ;
 		param.SetAttribute("VALUE",v.GetString()) ;
+		node->InsertEndChild(param) ;
+	}
+
+	// Persist the global dub-delay bus settings with the project
+	for (int i=0;i<6;i++) {
+		Variable *dv=delayBusVars(i) ;
+		TiXmlElement param("PARAMETER") ;
+		param.SetAttribute("NAME",dv->GetName()) ;
+		param.SetAttribute("VALUE",dv->GetString()) ;
 		node->InsertEndChild(param) ;
 	}
 } ;

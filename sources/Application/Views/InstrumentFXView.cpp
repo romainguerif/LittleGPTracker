@@ -140,6 +140,12 @@ void InstrumentFXView::fillFields() {
 	v = instrument->FindVariable(SIP_LFO_DEPTH) ;
 	f = new UIIntVarField(position, *v, "depth:     %2.2X", 0, 255, 1, 0x10) ;
 	T_SimpleList<UIField>::Insert(f) ;
+
+	// Delay send (feeds the global dub delay configured on the Project page)
+	position._y += 3 ;
+	v = instrument->FindVariable(SIP_DELAY_SEND) ;
+	f = new UIIntVarField(position, *v, "delay send: %2.2X", 0, 255, 1, 0x10) ;
+	T_SimpleList<UIField>::Insert(f) ;
 }
 
 void InstrumentFXView::DrawView() {

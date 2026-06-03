@@ -9,6 +9,7 @@
 #include "Application/Instruments/Filters.h"
 #include "Application/Model/Table.h"
 #include "Services/Audio/Audio.h"
+#include "Services/Audio/Delay.h"
 #include "SampleVariable.h"
 
 #include <stdio.h>
@@ -174,6 +175,10 @@ SampleInstrument::SampleInstrument() {
      Insert(lfoRate_);
      lfoDepth_ = new Variable("lfo depth", SIP_LFO_DEPTH, 0x60);
      Insert(lfoDepth_);
+
+     // Per-instrument send into the global dub delay (0 = dry only)
+     delaySend_ = new Variable("delay send", SIP_DELAY_SEND, 0x00);
+     Insert(delaySend_);
 
      for (int i = 0; i < SONG_CHANNEL_COUNT; i++) {
          compGain_[i] = 1.0f;
@@ -417,6 +422,7 @@ bool SampleInstrument::Start(int channel,unsigned char midinote,bool cleanstart)
 		rp->eqHigh_=eqHigh_->GetInt() ;
 		rp->lfoRate_=lfoRate_->GetInt() ;
 		rp->lfoDepth_=lfoDepth_->GetInt() ;
+		rp->delaySend_=delaySend_->GetInt() ;
 
 	// Init downsampling
 
@@ -704,6 +710,15 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 		int count=size ; // number of samples to treat
 
 		fixed *result=buffer ;
+
+		// Per-instrument delay send: tap the panned voice output into the
+		// global delay's send accumulator (only when this voice sends + delay on)
+		fixed *delaySendBuf=0 ;
+		fixed delaySendScale=0 ;
+		if (rp->delaySend_>0 && Delay::GetInstance()->active()) {
+			delaySendBuf=Delay::GetInstance()->sendBuffer() ;
+			delaySendScale=fl2fp(rp->delaySend_/255.0f) ;
+		}
 
 		// Get volume factor and pan
 
@@ -1162,6 +1177,12 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 
 				*result++=s2 ;
 				*result++=t2 ;
+
+				if (delaySendBuf) {
+					int of=(int)(result-buffer)-2 ; // index of s2 in this block
+					delaySendBuf[of]   += fp_mul(s2,delaySendScale) ;
+					delaySendBuf[of+1] += fp_mul(t2,delaySendScale) ;
+				}
 
 				*feedbackIn++=s2 ;
 				*feedbackIn++=t2 ;
@@ -1631,6 +1652,8 @@ void SampleInstrument::ProcessCommand(int channel,FourCC cc,ushort value) {
 			rp->lfoRate_=(unsigned char)(value&0xFF) ; break ;
 		case I_CMD_LFOD:
 			rp->lfoDepth_=(unsigned char)(value&0xFF) ; break ;
+		case I_CMD_DSND: // per-voice delay send
+			rp->delaySend_=(unsigned char)(value&0xFF) ; break ;
 		case I_CMD_RPAN: { // random pan spread
 			int amt=(value&0xFF) ;
 			rp->basePan_ += i2fp(siRandSigned(amt/2)) ;

@@ -61,6 +61,7 @@ struct renderParams {
 	unsigned char eqHigh_ ;
 	unsigned char lfoRate_ ;
 	unsigned char lfoDepth_ ;
+	unsigned char delaySend_ ; // per-voice delay send (FX-automatable via DSND)
 	fixed attenuate_ ; // filter attenuate
 
 	unsigned char downsample_ ; // downsampling

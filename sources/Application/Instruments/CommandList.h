@@ -40,6 +40,8 @@
 #define I_CMD_EQHI MAKE_FOURCC('E','Q','H','I')
 #define I_CMD_LFOR MAKE_FOURCC('L','F','O','R')
 #define I_CMD_LFOD MAKE_FOURCC('L','F','O','D')
+// Per-instrument delay send automation
+#define I_CMD_DSND MAKE_FOURCC('D','S','N','D')
 // Randomization
 #define I_CMD_PROB MAKE_FOURCC('P','R','O','B') // note probability (HH:LL = HH-in-LL)
 #define I_CMD_RPAN MAKE_FOURCC('R','P','A','N') // random pan spread

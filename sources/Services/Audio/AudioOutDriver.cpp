@@ -49,12 +49,15 @@ void AudioOutDriver::Trigger() {
 	TimeService *ts=TimeService::GetInstance() ;
 
     prepareMixBuffers();
+    // Clear the delay send accumulator before the voices render into it.
+    Delay::GetInstance()->clearSend(sampleCount_) ;
     hasSound_=AudioMixer::Render(primarySoundBuffer_,sampleCount_) ;
-    // Feed silence to the delay when the mix is empty so its tail rings out.
+    // Feed silence to the master when the mix is empty so the delay tail rings out.
     if (!hasSound_) {
         SYS_MEMSET(primarySoundBuffer_,0,sampleCount_*2*sizeof(fixed)) ;
     }
-    if (Delay::GetInstance()->process(primarySoundBuffer_,sampleCount_)) {
+    // Add the per-instrument delay sends (wet) onto the master.
+    if (Delay::GetInstance()->processSend(primarySoundBuffer_,sampleCount_)) {
         hasSound_=true ;
     }
     clipToMix();

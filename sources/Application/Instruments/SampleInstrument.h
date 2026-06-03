@@ -67,6 +67,8 @@ enum SampleInstrumentLoopMode {
 #define SIP_LFO_RATE   MAKE_FOURCC('L','F','R','T')
 #define SIP_LFO_DEPTH  MAKE_FOURCC('L','F','D','P')
 
+#define SIP_DELAY_SEND MAKE_FOURCC('D','S','N','D')
+
 #define FB_BUFFER_LENGTH 3500 // (in samples)
 
 class SampleInstrument: public I_Instrument,I_Observer {
@@ -173,6 +175,8 @@ private:
        Variable *lfoTarget_;
        Variable *lfoRate_;
        Variable *lfoDepth_;
+       // Per-instrument delay send level
+       Variable *delaySend_;
 
        static bool useDirtyDownsampling_;
        char *fxPresets[4];

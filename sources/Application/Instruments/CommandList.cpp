@@ -11,6 +11,7 @@ static FourCC _all[]= {
 	I_CMD_EQHI,
 	I_CMD_LFOR,
 	I_CMD_LFOD,
+	I_CMD_DSND,
 	I_CMD_PROB,
 	I_CMD_RPAN,
 	I_CMD_RPIT,
