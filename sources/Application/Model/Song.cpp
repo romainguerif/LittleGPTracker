@@ -47,7 +47,23 @@ void Song::RestoreContent(TiXmlElement *element) {
 	while(current) {
 		const char *value=current->Value() ;
 		if (!strcmp("SONG",value)) {
-			restoreHexBuffer(current,data_) ;
+			unsigned written=restoreHexBuffer(current,data_) ;
+			// Migrate legacy projects: the song grid is row-major
+			// (data_[row*SONG_CHANNEL_COUNT + channel]). Older projects were
+			// saved with fewer channels per row, so re-stride the flat buffer
+			// into the current layout and leave the new channels empty (0xFF).
+			if (written==(unsigned)(SONG_ROW_COUNT*SONG_CHANNEL_COUNT_LEGACY)
+			    && SONG_CHANNEL_COUNT>SONG_CHANNEL_COUNT_LEGACY) {
+				for (int row=SONG_ROW_COUNT-1;row>=0;row--) {
+					for (int ch=SONG_CHANNEL_COUNT_LEGACY-1;ch>=0;ch--) {
+						data_[row*SONG_CHANNEL_COUNT+ch]=
+							data_[row*SONG_CHANNEL_COUNT_LEGACY+ch] ;
+					}
+					for (int ch=SONG_CHANNEL_COUNT_LEGACY;ch<SONG_CHANNEL_COUNT;ch++) {
+						data_[row*SONG_CHANNEL_COUNT+ch]=0xFF ;
+					}
+				}
+			}
 		} ;
 		if (!strcmp("CHAINS",value)) {
 			restoreHexBuffer(current,chain_->data_) ;

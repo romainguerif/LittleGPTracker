@@ -67,7 +67,7 @@ void saveHexBuffer(TiXmlNode *parent,const char *nodeName,unsigned short *src,un
     saveHexBuffer(parent,nodeName,(unsigned char *)src,len*sizeof(short));
 }
 
-void restoreHexBuffer(TiXmlNode *node,unsigned char *destination) {
+unsigned restoreHexBuffer(TiXmlNode *node,unsigned char *destination) {
 
 	unsigned char *dst=destination ;
 	TiXmlElement *current=node->FirstChildElement() ;
@@ -98,4 +98,5 @@ void restoreHexBuffer(TiXmlNode *node,unsigned char *destination) {
 		current=current->NextSiblingElement() ;
 
 	} ;
+	return (unsigned)(dst-destination) ;
 } ;

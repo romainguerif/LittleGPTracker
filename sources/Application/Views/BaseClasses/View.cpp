@@ -44,7 +44,9 @@ View::View(GUIWindow &w,ViewData *viewData):
 GUIPoint View::GetAnchor() {
 	int width=40 ;
 	int height=30 ;
-	return GUIPoint((width-SONG_CHANNEL_COUNT*3)/2+2,(height-View::songRowCount_)/2) ;
+	// Center on the number of channels actually shown on screen (one page),
+	// not the total channel count (which may not fit).
+	return GUIPoint((width-SONG_CHANNELS_PER_PAGE*3)/2+2,(height-View::songRowCount_)/2) ;
 }
 
 GUIPoint View::GetTitlePosition() {
@@ -151,7 +153,11 @@ void View::drawNotes() {
 		
 		//column banger refactor
 		props.invert_= true;
-        for (int i=0;i<SONG_CHANNEL_COUNT;i++) {
+        // Only draw the visible page of channels so the columns stay within
+        // the screen width (drawing all SONG_CHANNEL_COUNT would overflow).
+        int page=(viewData_->songX_/SONG_CHANNELS_PER_PAGE)*SONG_CHANNELS_PER_PAGE ;
+        for (int vis=0;vis<SONG_CHANNELS_PER_PAGE;vis++) {
+            int i=page+vis ;
 			if (i==viewData_->songX_) {
 				SetColor(CD_HILITE2) ;
 			} else {

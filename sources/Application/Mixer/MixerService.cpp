@@ -7,6 +7,7 @@
 #include "Services/Audio/AudioDriver.h"
 #include "Services/Midi/MidiService.h"
 #include "System/Console/Trace.h"
+#include <time.h>
 
 MixerService::MixerService() : out_(0), sync_(0), isRendering_(false) {
     mode_ = MSRM_PLAYBACK;
@@ -58,16 +59,29 @@ bool MixerService::Init() {
 };
 
 void MixerService::initRendering(MixerServiceRenderMode mode) {
+    // Build a timestamp so each bounce gets a unique filename instead of
+    // overwriting the previous render. Falls back gracefully if the clock
+    // is unavailable.
+    char ts[32];
+    time_t now = time(0);
+    struct tm *lt = localtime(&now);
+    if (lt) {
+        strftime(ts, sizeof(ts), "%y%m%d-%H%M%S", lt);
+    } else {
+        strcpy(ts, "render");
+    }
+
+    char buffer[1024];
     switch(mode) {
     case MSRM_PLAYBACK:
         break;
     case MSRM_STEREO:
-        out_->SetFileRenderer("project:mixdown.wav");
+        sprintf(buffer, "project:mixdown_%s.wav", ts);
+        out_->SetFileRenderer(buffer);
         break;
     case MSRM_STEMS:
         for (int i = 0; i < SONG_CHANNEL_COUNT; i++) {
-            char buffer[1024];
-            sprintf(buffer, "project:channel%d.wav", i);
+            sprintf(buffer, "project:channel%d_%s.wav", i, ts);
             bus_[i].SetFileRenderer(buffer);
         }
         break;
@@ -166,14 +180,14 @@ void MixerService::toggleRendering(bool enable) {
     isRendering_ = enable;
     switch (mode_) {
     case MSRM_PLAYBACK:
-        initRendering(MSRM_PLAYBACK);
         break;
     case MSRM_STEREO:
-        initRendering(MSRM_STEREO);
+        // Generate a fresh timestamped filename only when starting a render.
+        if (enable) initRendering(MSRM_STEREO);
         out_->EnableRendering(enable);
         break;
     case MSRM_STEMS:
-        initRendering(MSRM_STEMS);
+        if (enable) initRendering(MSRM_STEMS);
         for (int i = 0; i < SONG_CHANNEL_COUNT; i++) {
             bus_[i].EnableRendering(enable);
         };

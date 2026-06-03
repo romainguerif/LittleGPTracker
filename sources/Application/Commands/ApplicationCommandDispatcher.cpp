@@ -36,7 +36,7 @@ void ApplicationCommandDispatcher::OnQueueRow() {
 	if (!project_) return ;
 	Player *player=Player::GetInstance() ;
     player->SetSequencerMode(SM_LIVE) ;
-	player->OnSongStartButton(0,7,false,false) ;
+	player->OnSongStartButton(0,SONG_CHANNEL_COUNT-1,false,false) ;
 } ;
 
 #define TEMPO_NUDGE 3

@@ -79,7 +79,9 @@ void EventDispatcher::Execute(FourCC id,float value) {
 			case TRIG_EVENT_START:
 				mapping=EPBT_START;
 				break ;
-				//	EPBT_SELECT
+			case TRIG_EVENT_SELECT:
+				mapping=EPBT_SELECT;
+				break ;
 		}
 
 		// Compute mask and repeat if needed

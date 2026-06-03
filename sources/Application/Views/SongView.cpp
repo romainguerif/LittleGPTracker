@@ -23,7 +23,7 @@ SongView::SongView(GUIWindow &w, ViewData *viewData, const char *song)
     lastChain_ = 0;
     songname_ = song;
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < SONG_CHANNEL_COUNT; i++) {
         this->lastPlayedPosition_[i] = 0;
         this->lastQueuedPosition_[i] = 0;
     }
@@ -251,12 +251,12 @@ void SongView::deepClonePosition() {
 
 void SongView::extendSelection() {
     GUIRect rect = getSelectionRect();
-    if (rect.Left() > 0 || rect.Right() < 7) {
+    if (rect.Left() > 0 || rect.Right() < SONG_CHANNEL_COUNT - 1) {
         if (viewData_->songX_ < clipboard_.x_) {
             viewData_->songX_ = 0;
-            clipboard_.x_ = 7;
+            clipboard_.x_ = SONG_CHANNEL_COUNT - 1;
         } else {
-            viewData_->songX_ = 7;
+            viewData_->songX_ = SONG_CHANNEL_COUNT - 1;
             clipboard_.x_ = 0;
         }
         isDirty_ = true;
@@ -503,7 +503,7 @@ void SongView::onStart() {
 void SongView::startCurrentRow() {
     Player *player = Player::GetInstance();
     player->SetSequencerMode(SM_LIVE);
-    player->OnSongStartButton(0, 7, false, false);
+    player->OnSongStartButton(0, SONG_CHANNEL_COUNT - 1, false, false);
 }
 
 void SongView::startImmediate() {
@@ -599,6 +599,22 @@ void SongView::ProcessButtonMask(unsigned short mask, bool pressed) {
         };
         return;
     };
+
+    // SELECT + L/R : page between channel groups (1-8 / 9-16), keeping the
+    // cursor on the same column within the page.
+    if ((mask & EPBM_SELECT) && (mask & (EPBM_L | EPBM_R))) {
+        int col = viewData_->songX_ % SONG_CHANNELS_PER_PAGE;
+        if (mask & EPBM_R) {
+            viewData_->songX_ = col + SONG_CHANNELS_PER_PAGE;
+        } else {
+            viewData_->songX_ = col;
+        }
+        if (viewData_->songX_ > SONG_CHANNEL_COUNT - 1) {
+            viewData_->songX_ = SONG_CHANNEL_COUNT - 1;
+        }
+        isDirty_ = true;
+        return;
+    }
 
     if (viewMode_ == VM_NEW) {
         if (mask == EPBM_A) {
@@ -793,7 +809,7 @@ void SongView::processNormalButtonMask(unsigned int mask) {
 
     if ((!(mask & EPBM_A)) && updatingChain_) {
         unsigned char *c = viewData_->song_->data_ + updateX_ +
-                           8 * (viewData_->songOffset_ + updateY_);
+                           SONG_CHANNEL_COUNT * (viewData_->songOffset_ + updateY_);
         viewData_->song_->chain_->SetUsed(*c);
         updatingChain_ = false;
     }
@@ -953,15 +969,21 @@ void SongView::DrawView() {
     SetColor(CD_NORMAL);
 
     pos = anchor;
-    unsigned char *data =
-        viewData_->song_->data_ + (SONG_CHANNEL_COUNT * viewData_->songOffset_);
+    // Only the current page of SONG_CHANNELS_PER_PAGE channels is shown.
+    int page = (viewData_->songX_ / SONG_CHANNELS_PER_PAGE) * SONG_CHANNELS_PER_PAGE;
     short dx = 3;
     short dy = 1;
     for (int j = 0; j < View::songRowCount_; j++) {
 
         pos._x = anchor._x;
 
-        for (int i = 0; i < 8; i++) {
+        unsigned char *data = viewData_->song_->data_ +
+                              SONG_CHANNEL_COUNT * (viewData_->songOffset_ + j) +
+                              page;
+
+        for (int i = 0; i < SONG_CHANNELS_PER_PAGE; i++) {
+
+            int ch = page + i; // absolute channel index
 
             bool invert = false;
 
@@ -969,13 +991,13 @@ void SongView::DrawView() {
             // if there's a selection or we are at cursor position
 
             if (clipboard_.active_) {
-                if ((i >= selRect.Left()) && (i <= selRect.Right()) &&
+                if ((ch >= selRect.Left()) && (ch <= selRect.Right()) &&
                     (j + viewData_->songOffset_ >= selRect.Top()) &&
                     (j + viewData_->songOffset_ <= selRect.Bottom())) {
                     invert = true;
                 }
             } else {
-                if (i == viewData_->songX_ && j == viewData_->songY_) {
+                if (ch == viewData_->songX_ && j == viewData_->songY_) {
                     invert = true;
                 }
             }
@@ -1045,9 +1067,12 @@ void SongView::OnPlayerUpdate(PlayerEventType eventType, unsigned int tick) {
     GUITextProperties props;
     SetColor(CD_CURSOR);
 
-    // Loop on all channels
+    // Loop on the visible page of channels only
 
-    for (int i = 0; i < SONG_CHANNEL_COUNT; i++) {
+    int page = (viewData_->songX_ / SONG_CHANNELS_PER_PAGE) * SONG_CHANNELS_PER_PAGE;
+    for (int vis = 0; vis < SONG_CHANNELS_PER_PAGE; vis++) {
+
+        int i = page + vis; // absolute channel index
 
         // Clear all current positions
 

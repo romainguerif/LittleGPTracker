@@ -6,6 +6,8 @@
 void saveHexBuffer(TiXmlNode *parent,const char *nodeName,unsigned char *src,unsigned len) ;
 void saveHexBuffer(TiXmlNode *parent,const char *nodeName,unsigned short *src,unsigned len) ;
 void saveHexBuffer(TiXmlNode *parent,const char *nodeName,unsigned int *src,unsigned len) ;
-void restoreHexBuffer(TiXmlNode *node,unsigned char *dst) ;
+// Returns the number of bytes written into dst (used to detect legacy buffer
+// sizes, e.g. for project format migration).
+unsigned restoreHexBuffer(TiXmlNode *node,unsigned char *dst) ;
 
 #endif

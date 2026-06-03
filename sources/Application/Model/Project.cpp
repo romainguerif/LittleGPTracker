@@ -376,7 +376,19 @@ void Project::LoadFirstGen(const char *root) {
 		file->Read(&tempo,sizeof(int),1) ;
 		Variable *v=FindVariable(VAR_TEMPO) ;
 		v->SetInt(tempo);
-		file->Read(song_->data_,sizeof(char),SONG_CHANNEL_COUNT*256) ;
+		{
+			// Legacy binary format always stored SONG_CHANNEL_COUNT_LEGACY
+			// channels per row; expand into the current row-major layout.
+			unsigned char legacy[SONG_CHANNEL_COUNT_LEGACY*256] ;
+			file->Read(legacy,sizeof(char),SONG_CHANNEL_COUNT_LEGACY*256) ;
+			memset(song_->data_,0xFF,SONG_CHANNEL_COUNT*256) ;
+			for (int row=0;row<256;row++) {
+				for (int ch=0;ch<SONG_CHANNEL_COUNT_LEGACY;ch++) {
+					song_->data_[row*SONG_CHANNEL_COUNT+ch]=
+						legacy[row*SONG_CHANNEL_COUNT_LEGACY+ch] ;
+				}
+			}
+		}
 		file->Read(song_->chain_->data_,sizeof(char),CHAIN_COUNT*16) ;
 		file->Read(song_->chain_->transpose_,sizeof(char),CHAIN_COUNT*16) ;
 		file->Read(song_->phrase_->note_,sizeof(char),PHRASE_COUNT*16) ;
