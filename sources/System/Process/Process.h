@@ -10,22 +10,27 @@ class SysThreadExecuter ;
 class SysThread {
 
 public:
-	SysThread() { isFinished_=false ; shouldTerminate_=false ; } ;
+	SysThread() { isFinished_=false ; shouldTerminate_=false ; osHandle_=0 ; } ;
 	virtual ~SysThread() {} ;
 	bool Start() ;
 	virtual void RequestTermination() ;
 	bool IsFinished() ;
+	// OS-level thread handle, set by the platform factory at Start() so the
+	// thread can be joined cleanly at teardown (e.g. SDL_Thread* / pthread_t).
+	void SetOSHandle(void *h) { osHandle_=h ; }
+	void *GetOSHandle() { return osHandle_ ; }
 
 public: // Override in subclasses
 	virtual bool Execute()=0 ;
 public:
-	bool startExecution() ; 
+	bool startExecution() ;
 protected:
 	bool shouldTerminate() ;
 
 private:
 	bool shouldTerminate_ ;
 	bool isFinished_ ;
+	void *osHandle_ ;
 } ;
 
 // semaphores

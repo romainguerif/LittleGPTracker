@@ -35,9 +35,19 @@ void SDLAudioDriverThread::Notify() {
 void SDLAudioDriverThread::RequestTermination() {
     SysThread::RequestTermination();
     // post to be sure we're not locked
-    semaphore_->Post();
-    // Wait for thread to finish
-    SDL_Delay(10);
+    if (semaphore_) {
+        semaphore_->Post();
+    }
+    // Real join: block until Execute() actually returns, instead of guessing
+    // with a fixed SDL_Delay (which left the worker possibly mid-render while
+    // the caller went on to free things). The audio callback is still active
+    // here (StopDriver pauses it AFTER us), so the worker's final iteration can
+    // drain normally.
+    SDL_Thread *t = (SDL_Thread *)GetOSHandle();
+    if (t) {
+        SDL_WaitThread(t, NULL);
+        SetOSHandle(0);
+    }
 }
 
 //-------------------------------------------------------------------------------------------------

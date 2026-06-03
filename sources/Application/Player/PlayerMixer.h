@@ -11,7 +11,10 @@
 #include "Foundation/Observable.h"
 #include "Services/Audio/AudioOut.h"
 
-#define STREAM_MIX_BUS 8
+// Dedicated bus for the audio file streamer (import preview), placed just past
+// the track buses so it never collides with a real track (was 8, which was a
+// real track after the 8->16 change). Must stay < MAX_BUS_COUNT.
+#define STREAM_MIX_BUS SONG_CHANNEL_COUNT
 
 class PlayerMixer: public T_Singleton<PlayerMixer>,public Observable,public I_Observer {
 public:

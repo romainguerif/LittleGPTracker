@@ -443,6 +443,14 @@ void AppWindow::CloseProject() {
     player->Stop();
     player->RemoveObserver(*this);
 
+    // Hold the mixer lock across the whole teardown. The audio worker thread
+    // runs the sequencer tick AND the sample render under this same (recursive)
+    // lock, so taking it here guarantees no audio-thread code reads the project,
+    // its instruments or its sample PCM while we free them -> closes the
+    // use-after-free / heap corruption that built up across project switches.
+    MixerService *mixer = MixerService::GetInstance();
+    mixer->Lock();
+
     player->Reset();
 
     SamplePool *pool = SamplePool::GetInstance();
@@ -468,6 +476,8 @@ void AppWindow::CloseProject() {
     controller->Reset();
 
     SAFE_DELETE(_viewData);
+
+    mixer->Unlock();
 
     _currentView = _nullView;
     _nullView->SetDirty(true);

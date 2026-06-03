@@ -66,11 +66,15 @@ void PlayerChannel::SetMixBus(int i) {
 	if (mixBus_) {
 		mixBus_->Insert(*this) ;
 	}
+	// Remember the bus so the early-out above actually works: without this every
+	// audio callback did 16 Remove+Insert (~32 alloc/free) on the realtime thread.
+	busIndex_=i ;
 } ;
 
 void PlayerChannel::Reset() {
 	if (mixBus_) {
 		mixBus_->Remove(*this) ;
+		mixBus_=0 ;
 	}
 	muted_=false ;
 	busIndex_=-1 ;

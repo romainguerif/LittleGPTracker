@@ -36,6 +36,16 @@ static int siRandSigned(int range) {
     return (int)(s_siRng % (unsigned)(2*range+1)) - range ;
 }
 
+// Saturating float -> fixed (Q16.15) conversion. EQ boosts / makeup gain can
+// push a sample past the 16-bit range; a plain (fixed)cast would wrap (INT32
+// overflow) and produce a hard polarity-flip click. Clamp instead.
+static inline fixed satF2Fp(float v) {
+    const float hi =  1073709056.0f ; // i2fp(32767)
+    const float lo = -1073741824.0f ; // i2fp(-32768)
+    if (v > hi) v = hi ; else if (v < lo) v = lo ;
+    return (fixed)v ;
+}
+
 #define SHOULD_KILL_CLICKS false
 
 int SampleInstrument::lastMidiNote_[SONG_CHANNEL_COUNT]= {
@@ -380,6 +390,13 @@ bool SampleInstrument::Start(int channel,unsigned char midinote,bool cleanstart)
 
 	rp->finished_=false ;
 
+	// Reset per-channel DSP state at note start so it doesn't carry over from a
+	// previous note/instrument on this channel (stale EQ/LFO state = clicks or
+	// wrong timbre; stale compGain = a wrong burst of gain reduction).
+	memset(eqZ_[channel],0,sizeof(eqZ_[channel])) ;
+	lfoPhase_[channel]=0.0f ;
+	compGain_[channel]=1.0f ;
+
   // Initialize feedback data
 
 	memset(feedback_[channel],0,FB_BUFFER_LENGTH*2*sizeof(fixed)) ;
@@ -633,6 +650,11 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 		// have a useful, musical range and real gain-reduction depth.
 		bool compActive = (compOn_->GetInt()!=0) ;
 		float compThreshLin=1.0f, compSlope=0.0f, compAtt=1.0f, compRel=0.01f, compMakeupLin=1.0f ;
+		// Gain-vs-peak curve precomputed ONCE per block so the inner loop is a
+		// table lookup instead of a powf() per sample (powf is ~100-300 cyc on a
+		// Cortex-A53 with no hw pow). peak in [0,1] mapped over COMP_TBL entries.
+		const int COMP_TBL = 256 ;
+		float compGainTable[COMP_TBL+1] ;
 		if (compActive) {
 			float threshDb = (compThresh_->GetInt()/255.0f - 1.0f) * 48.0f ; // -48..0 dBFS
 			compThreshLin = powf(10.0f, threshDb/20.0f) ;
@@ -644,6 +666,11 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 			compRel = 1.0f - expf(-1.0f / (relMs * 0.001f * 44100.0f)) ;
 			float makeupDb = (compMakeup_->GetInt()/255.0f) * 24.0f ;        // 0..24 dB
 			compMakeupLin = powf(10.0f, makeupDb/20.0f) ;
+			for (int i=0; i<=COMP_TBL; i++) {
+				float peak = (float)i / (float)COMP_TBL ;                    // 0..1
+				compGainTable[i] = (peak > compThreshLin)
+					? powf(compThreshLin/peak, compSlope) : 1.0f ;
+			}
 		}
 
 		// Per-instrument 3-band EQ coefficients (RBJ cookbook, computed once per
@@ -1128,9 +1155,14 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 				} ;
 
 				// Per-instrument 3-band EQ (after filter, before compressor).
+				// Process in normalised [-1,1] so the biquad state keeps full
+				// float precision (a raw Q16.15 value ~1e9 overflows the 24-bit
+				// mantissa). Scale back with saturation to avoid wrap clicks.
 				if (eqActive) {
-					float xs = (float)s2 ;
-					float xt = (float)t2 ;
+					const float EQ_FS  = 1073741824.0f ;       // i2fp(32768)
+					const float EQ_INV = 1.0f/1073741824.0f ;
+					float xs = ((float)s2) * EQ_INV ;
+					float xt = ((float)t2) * EQ_INV ;
 					for (int b = 0; b < 3; b++) {
 						if (!eqBandActive[b]) continue ;
 						float *zs = eqZ_[channel][0][b] ;
@@ -1144,8 +1176,8 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 						zt[1] = eqB2[b]*xt - eqA2[b]*yt ;
 						xt = yt ;
 					}
-					s2 = (fixed)xs ;
-					t2 = (fixed)xt ;
+					s2 = satF2Fp(xs * EQ_FS) ;
+					t2 = satF2Fp(xt * EQ_FS) ;
 				}
 
 				// Per-instrument compressor (after filter, before pan).
@@ -1156,18 +1188,17 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 					float al = (l<0)?-l:l ;
 					float ar = (r<0)?-r:r ;
 					float peak = (al>ar)?al:ar ;
-					// target gain (<=1), dB-accurate above the threshold
-					float gTarget = 1.0f ;
-					if (peak > compThreshLin) {
-						gTarget = powf(compThreshLin/peak, compSlope) ;
-					}
+					// target gain (<=1) via the precomputed curve (no per-sample powf)
+					int pidx = (int)(peak * (float)COMP_TBL) ;
+					if (pidx < 0) pidx = 0 ; else if (pidx > COMP_TBL) pidx = COMP_TBL ;
+					float gTarget = compGainTable[pidx] ;
 					// attack when the gain drops (more reduction), release when it recovers
 					float cur = compGain_[channel] ;
 					cur += (gTarget - cur) * ((gTarget<cur)?compAtt:compRel) ;
 					compGain_[channel] = cur ;
 					float g = cur * compMakeupLin ;
-					s2 = (fixed)(((float)s2) * g) ;
-					t2 = (fixed)(((float)t2) * g) ;
+					s2 = satF2Fp(((float)s2) * g) ;
+					t2 = satF2Fp(((float)t2) * g) ;
 				}
 
 				// introduce panning & vol - store result
@@ -1666,6 +1697,10 @@ void SampleInstrument::ProcessCommand(int channel,FourCC cc,ushort value) {
 			int amt=(value&0xFF) ;
 			float f=siRandSigned(1000)/1000.0f ;
 			rp->baseSpeed_=fp_mul(rp->baseSpeed_, fl2fp(1.0f + f*(amt/255.0f)*0.06f)) ;
+			// Bound the multiplicative walk: a repeated RPIT (sustained note /
+			// table loop) would otherwise drift the pitch off to silence/extremes.
+			if (rp->baseSpeed_ < fl2fp(0.25f)) rp->baseSpeed_=fl2fp(0.25f) ;
+			if (rp->baseSpeed_ > fl2fp(4.0f))  rp->baseSpeed_=fl2fp(4.0f) ;
 			rp->speed_=rp->baseSpeed_ ;
 			break ;
 		}
@@ -1673,6 +1708,8 @@ void SampleInstrument::ProcessCommand(int channel,FourCC cc,ushort value) {
 			int amt=(value&0xFF) ;
 			rp->baseVolume_ += i2fp(siRandSigned(amt/2)) ;
 			if (rp->baseVolume_<0) rp->baseVolume_=0 ;
+			// clamp the top too (was low-only -> volume could run away upward)
+			if (rp->baseVolume_>i2fp(255)) rp->baseVolume_=i2fp(255) ;
 			rp->volume_=rp->baseVolume_ ;
 			break ;
 		}

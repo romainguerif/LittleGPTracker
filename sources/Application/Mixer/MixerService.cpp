@@ -9,7 +9,7 @@
 #include "System/Console/Trace.h"
 #include <time.h>
 
-MixerService::MixerService() : out_(0), sync_(0), isRendering_(false) {
+MixerService::MixerService() : out_(0), ownsOut_(false), sync_(0), isRendering_(false) {
     mode_ = MSRM_PLAYBACK;
 };
 
@@ -21,10 +21,12 @@ MixerService::~MixerService(){};
 bool MixerService::Init() {
     // create the output depending on rendering mode
     out_ = 0;
+    ownsOut_ = false;
 	switch (mode_) {
     case MSRM_STEREO:
     case MSRM_STEMS:
         out_ = new DummyAudioOut();
+        ownsOut_ = true; // we own this one and must delete it in Close()
         break;
     default:
         Audio *audio = Audio::GetInstance();
@@ -106,6 +108,12 @@ void MixerService::Close() {
    for (int i=0;i<MAX_BUS_COUNT;i++) {
 	   bus_[i].Empty() ;
    }
+	// Delete the output only if we created it (DummyAudioOut for stereo/stem
+	// render); the playback out_ is owned by Audio and must not be deleted.
+	if (ownsOut_) {
+		delete out_ ;
+		ownsOut_=false ;
+	}
 	out_=0 ;
 	SDL_DestroyMutex(sync_) ;
 	sync_=0 ;

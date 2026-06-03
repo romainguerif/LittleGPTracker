@@ -9,8 +9,12 @@ int _SDLStartThread(void *argp) {
 }
 
 bool SDLProcessFactory::BeginThread(SysThread& thread) {
-	SDL_CreateThread(_SDLStartThread,&thread);
-	return true ;
+	// Keep the handle so the thread can be joined (SDL_WaitThread) at teardown
+	// instead of being leaked / guessed at with a fixed delay. (Signature kept
+	// exactly as the original call to match this build's SDL2 headers.)
+	SDL_Thread *t = SDL_CreateThread(_SDLStartThread,&thread);
+	thread.SetOSHandle(t) ;
+	return (t!=0) ;
 }
 
 SysSemaphore *SDLProcessFactory::CreateNewSemaphore(int initialcount, int maxcount) {
@@ -18,11 +22,14 @@ SysSemaphore *SDLProcessFactory::CreateNewSemaphore(int initialcount, int maxcou
 } ;
 
 SDLSysSemaphore::SDLSysSemaphore(int initialcount,int maxcount) {
-	handle_=SDL_CreateSemaphore(0) ;
+	handle_=SDL_CreateSemaphore(initialcount) ;
 } ;
 
 SDLSysSemaphore::~SDLSysSemaphore() {
-	handle_=0 ;
+	if (handle_) {
+		SDL_DestroySemaphore(handle_) ;
+		handle_=0 ;
+	}
 } ;
 
 SysSemaphoreResult SDLSysSemaphore::Wait() {

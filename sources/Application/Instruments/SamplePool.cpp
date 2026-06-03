@@ -252,8 +252,9 @@ void SamplePool::PurgeSample(int i) {
 	Path path(wavPath.c_str()) ;
 	//delete wav
 	SAFE_DELETE(wav_[i]) ;
-	// delete name entry
-	SAFE_DELETE(names_[i]) ;
+	// delete name entry (allocated with SYS_MALLOC -> must use SAFE_FREE, not
+	// SAFE_DELETE, or it's a new/free mismatch = UB on a custom allocator)
+	SAFE_FREE(names_[i]) ;
 
 	// delete file
 	FileSystem::GetInstance()->Delete(path.GetPath().c_str()) ;

@@ -12,6 +12,7 @@
 #include "Services/Audio/AudioMixer.h"
 #include "Services/Audio/AudioOut.h"
 #include "MixBus.h"
+#include "Application/Model/Song.h" // SONG_CHANNEL_COUNT
 
 enum MixerServiceRenderMode {
     MSRM_PLAYBACK,
@@ -19,7 +20,10 @@ enum MixerServiceRenderMode {
     MSRM_STEMS,
 };
 
-#define MAX_BUS_COUNT 16
+// One bus per track, plus one extra dedicated bus for the file streamer /
+// import preview (STREAM_MIX_BUS). Tying these to SONG_CHANNEL_COUNT keeps the
+// streamer bus out of the track range after the 8->16 track change.
+#define MAX_BUS_COUNT (SONG_CHANNEL_COUNT + 1)
 
 class MixerService: 
       public T_Singleton<MixerService>,
@@ -65,6 +69,7 @@ protected:
 private:
   void initRendering(MixerServiceRenderMode);
   AudioOut *out_;
+  bool ownsOut_; // true when out_ is our own DummyAudioOut (must be deleted)
   MixBus master_;
   MixBus bus_[MAX_BUS_COUNT];
   MixerServiceRenderMode mode_;

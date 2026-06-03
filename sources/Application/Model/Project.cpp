@@ -103,6 +103,14 @@ tempoNudge_(0)
 Project::~Project() {
 	delete song_ ;
 	delete instrumentBank_ ;
+	// Free the MIDI device name list (a new Project is built on every project
+	// load, so without this it leaked one char** + N strings per switch).
+	if (midiDeviceList_) {
+		for (int i=0;i<midiDeviceListSize_;i++) {
+			SAFE_FREE(midiDeviceList_[i]) ;
+		}
+		SAFE_FREE(midiDeviceList_) ;
+	}
 } ;
 
 int Project::GetScale() {
@@ -348,6 +356,19 @@ void Project::RestoreContent(TiXmlElement *element) {
 		tableRatio=(doc->version_<=32)?2:1 ;
 	}
 	SyncMaster::GetInstance()->SetTableRatio(tableRatio) ;
+
+	// Reset the global dub-delay bus to defaults BEFORE restoring, so a project
+	// that has no delay entries in its XML (older project) does not inherit the
+	// previously loaded project's delay (which would leave it audibly on).
+	{
+		Delay *dly=Delay::GetInstance() ;
+		dly->onVar_->SetInt(0) ;
+		dly->timeVar_->SetInt(0x60) ;
+		dly->feedbackVar_->SetInt(0x90) ;
+		dly->toneVar_->SetInt(0x70) ;
+		dly->wetVar_->SetInt(0x80) ;
+		dly->pingpongVar_->SetInt(0) ;
+	}
 
 	// Now loop on all variables
 

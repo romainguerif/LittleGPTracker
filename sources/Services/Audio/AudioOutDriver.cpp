@@ -46,6 +46,21 @@ void AudioOutDriver::Stop() {
 
 void AudioOutDriver::Trigger() {
 
+#if defined(__aarch64__)
+	// Flush denormals to zero on the audio thread. Decaying float state in the
+	// EQ / LFO / delay feedback paths drifts into the denormal range, which is
+	// extremely slow on Cortex-A53 and shows up as a CPU creep that worsens over
+	// a session. Setting FPCR.FZ (bit 24) makes denormals flush to 0.
+	{
+		unsigned long fpcr ;
+		__asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr)) ;
+		if (!(fpcr & (1UL<<24))) {
+			fpcr |= (1UL<<24) ;
+			__asm__ __volatile__("msr fpcr, %0" :: "r"(fpcr)) ;
+		}
+	}
+#endif
+
 	TimeService *ts=TimeService::GetInstance() ;
 
     prepareMixBuffers();

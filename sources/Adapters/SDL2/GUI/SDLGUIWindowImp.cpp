@@ -466,9 +466,18 @@ GUIRect SDLGUIWindowImp::GetRect()
 
 // Pushback a SDL event to specify screen has to be redrawn.
 
-void SDLGUIWindowImp::Invalidate() 
+void SDLGUIWindowImp::Invalidate()
 {
-    // Todo: SL: Haven't found a good replacement here yet
+    // The player asks for a repaint on every audio buffer. Each repaint does a
+    // full-surface blit, so without coalescing the EXPOSED events pile up faster
+    // than they drain once a frame costs more than a buffer period (heavy DSP /
+    // big samples) -> growing input latency and a session that "lags more and
+    // more". Coalesce: never queue a second repaint while one is still pending
+    // (the queued one will paint the latest surface anyway). Safe for both the
+    // playback cursor and interactive redraws -- it never drops a needed flush.
+    if (SDL_HasEvent(SDL_WINDOWEVENT)) {
+        return ; // a repaint is already queued
+    }
     SDL_Event event ;
     event.type=SDL_WINDOWEVENT ;
     event.window.event = SDL_WINDOWEVENT_EXPOSED;

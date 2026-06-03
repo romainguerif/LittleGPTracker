@@ -296,10 +296,12 @@ GUIRect SongView::getSelectionRect() {
 
 void SongView::fillClipboardData() {
 
-    // Clear current selection data
-
-    if (!clipboard_.data_)
+    // Clear current selection data (free the PREVIOUS buffer if any -- the test
+    // was inverted, so it only "freed" when already null and leaked otherwise).
+    if (clipboard_.data_) {
         SYS_FREE((void *)clipboard_.data_);
+        clipboard_.data_ = 0;
+    }
 
     // Prepare selection related information
 
