@@ -6,6 +6,7 @@
 #include "Application/Views/ConsoleView.h"
 #include "Application/Views/GrooveView.h"
 #include "Application/Views/InstrumentView.h"
+#include "Application/Views/InstrumentFXView.h"
 #include "Application/Views/MixerView.h"
 #include "Application/Views/NullView.h"
 #include "Application/Views/PhraseView.h"
@@ -68,6 +69,7 @@ class AppWindow : public GUIWindow, I_Observer, Status {
     PhraseView *_phraseView;
     ProjectView *_projectView;
     InstrumentView *_instrumentView;
+    InstrumentFXView *_instrumentFXView;
     TableView *_tableView;
     GrooveView *_grooveView;
     NullView *_nullView;

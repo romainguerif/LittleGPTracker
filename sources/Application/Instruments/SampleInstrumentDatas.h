@@ -15,6 +15,13 @@ char *filterMode[] = {
 	"scream"
 } ;
 
+char *lfoTargets[] = {
+	"off",
+	"cutoff",
+	"volume",
+	"pitch"
+} ;
+
 enum FilterMode
 {
   FM_ORIGINAL=0,

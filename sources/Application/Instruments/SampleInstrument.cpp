@@ -19,12 +19,16 @@
 #include "Application/Player/SyncMaster.h"
 
 fixed SampleInstrument::feedback_[SONG_CHANNEL_COUNT][FB_BUFFER_LENGTH*2] ;
+float SampleInstrument::compGain_[SONG_CHANNEL_COUNT] ;
+float SampleInstrument::eqZ_[SONG_CHANNEL_COUNT][2][3][2] ;
+float SampleInstrument::lfoPhase_[SONG_CHANNEL_COUNT] ;
 
 bool SampleInstrument::useDirtyDownsampling_ = false;
 
 #define SHOULD_KILL_CLICKS false
 
 int SampleInstrument::lastMidiNote_[SONG_CHANNEL_COUNT]= {
+	-1,-1,-1,-1,-1,-1,-1,-1,
 	-1,-1,-1,-1,-1,-1,-1,-1
 } ;
 
@@ -126,6 +130,44 @@ SampleInstrument::SampleInstrument() {
 
      irWet_ = new Variable("effect amount", SIP_IR_WET, 45);
      Insert(irWet_);
+
+     // Per-instrument compressor (off by default -> zero cost, projects unaffected)
+     compOn_ = new Variable("comp", SIP_COMP_ON, false);
+     Insert(compOn_);
+     compThresh_ = new Variable("comp thresh", SIP_COMP_THRESH, 0x80);  // ~-24 dBFS
+     Insert(compThresh_);
+     compRatio_ = new Variable("comp ratio", SIP_COMP_RATIO, 0x60);     // ~5:1
+     Insert(compRatio_);
+     compAttack_ = new Variable("comp attack", SIP_COMP_ATTACK, 0x20);
+     Insert(compAttack_);
+     compRelease_ = new Variable("comp release", SIP_COMP_RELEASE, 0x80);
+     Insert(compRelease_);
+     compMakeup_ = new Variable("comp makeup", SIP_COMP_MAKEUP, 0x20);  // ~+3 dB
+     Insert(compMakeup_);
+
+     // Per-instrument 3-band EQ (center 0x80 = 0 dB, off by default)
+     eqOn_ = new Variable("eq", SIP_EQ_ON, false);
+     Insert(eqOn_);
+     eqLow_ = new Variable("eq low", SIP_EQ_LOW, 0x80);
+     Insert(eqLow_);
+     eqMid_ = new Variable("eq mid", SIP_EQ_MID, 0x80);
+     Insert(eqMid_);
+     eqHigh_ = new Variable("eq high", SIP_EQ_HIGH, 0x80);
+     Insert(eqHigh_);
+
+     // Per-instrument LFO (off by default)
+     lfoOn_ = new Variable("lfo", SIP_LFO_ON, false);
+     Insert(lfoOn_);
+     lfoTarget_ = new Variable("lfo target", SIP_LFO_TARGET, lfoTargets, 4, 0);
+     Insert(lfoTarget_);
+     lfoRate_ = new Variable("lfo rate", SIP_LFO_RATE, 0x40);
+     Insert(lfoRate_);
+     lfoDepth_ = new Variable("lfo depth", SIP_LFO_DEPTH, 0x60);
+     Insert(lfoDepth_);
+
+     for (int i = 0; i < SONG_CHANNEL_COUNT; i++) {
+         compGain_[i] = 1.0f;
+     }
 
      // Initalize instrument's voices update list
 
@@ -359,6 +401,13 @@ bool SampleInstrument::Start(int channel,unsigned char midinote,bool cleanstart)
 		rp->crush_=crush_->GetInt() ;
 		rp->drive_=drive_->GetInt() ;
 
+	// Seed FX-automatable EQ / LFO values from the instrument
+		rp->eqLow_=eqLow_->GetInt() ;
+		rp->eqMid_=eqMid_->GetInt() ;
+		rp->eqHigh_=eqHigh_->GetInt() ;
+		rp->lfoRate_=lfoRate_->GetInt() ;
+		rp->lfoDepth_=lfoDepth_->GetInt() ;
+
 	// Init downsampling
 
 		rp->downsample_=downsample_->GetInt() ;
@@ -562,6 +611,85 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 		char *wavbuf=(char *)rp->sampleBuffer_ ;
 
 		int channelCount=rp->channelCount_ ;
+
+		// Per-instrument compressor coefficients (computed once per render block,
+		// not per sample). Off by default -> zero cost. dB-domain so the controls
+		// have a useful, musical range and real gain-reduction depth.
+		bool compActive = (compOn_->GetInt()!=0) ;
+		float compThreshLin=1.0f, compSlope=0.0f, compAtt=1.0f, compRel=0.01f, compMakeupLin=1.0f ;
+		if (compActive) {
+			float threshDb = (compThresh_->GetInt()/255.0f - 1.0f) * 48.0f ; // -48..0 dBFS
+			compThreshLin = powf(10.0f, threshDb/20.0f) ;
+			float ratio = 1.0f + (compRatio_->GetInt()/255.0f) * 19.0f ;     // 1..20:1
+			compSlope = 1.0f - 1.0f/ratio ;                                  // gain-reduction slope
+			float attMs = 0.1f + (compAttack_->GetInt()/255.0f) * 99.9f ;    // 0.1..100 ms
+			float relMs = 5.0f + (compRelease_->GetInt()/255.0f) * 495.0f ;  // 5..500 ms
+			compAtt = 1.0f - expf(-1.0f / (attMs * 0.001f * 44100.0f)) ;
+			compRel = 1.0f - expf(-1.0f / (relMs * 0.001f * 44100.0f)) ;
+			float makeupDb = (compMakeup_->GetInt()/255.0f) * 24.0f ;        // 0..24 dB
+			compMakeupLin = powf(10.0f, makeupDb/20.0f) ;
+		}
+
+		// Per-instrument 3-band EQ coefficients (RBJ cookbook, computed once per
+		// render block). Bands at 0 dB are skipped per-sample. Off -> zero cost.
+		bool eqActive = (eqOn_->GetInt()!=0) ;
+		float eqB0[3], eqB1[3], eqB2[3], eqA1[3], eqA2[3] ;
+		bool eqBandActive[3] = { false, false, false } ;
+		if (eqActive) {
+			const float TWO_PI = 6.2831853f ;
+			const float fs = 44100.0f ;
+			float freqs[3] = { 200.0f, 1000.0f, 4000.0f } ; // low shelf / mid bell / high shelf
+			int gp[3] = { rp->eqLow_, rp->eqMid_, rp->eqHigh_ } ; // FX-automatable
+			for (int b = 0; b < 3; b++) {
+				float gainDb = (gp[b]-128)/128.0f * 12.0f ; // -12..+12 dB
+				if (gainDb > -0.1f && gainDb < 0.1f) { continue ; } // flat -> skip
+				eqBandActive[b] = true ;
+				float A = powf(10.0f, gainDb/40.0f) ;
+				float w0 = TWO_PI * freqs[b] / fs ;
+				float cw = cosf(w0) ;
+				float sw = sinf(w0) ;
+				float b0, b1, b2, a0, a1, a2 ;
+				if (b == 1) { // peaking, Q = 0.8
+					float alpha = sw / (2.0f*0.8f) ;
+					b0 = 1.0f + alpha*A ; b1 = -2.0f*cw ; b2 = 1.0f - alpha*A ;
+					a0 = 1.0f + alpha/A ; a1 = -2.0f*cw ; a2 = 1.0f - alpha/A ;
+				} else { // shelving, S = 1
+					float alpha = sw/2.0f * sqrtf((A + 1.0f/A) * (1.0f/1.0f - 1.0f) + 2.0f) ;
+					float beta = 2.0f*sqrtf(A)*alpha ;
+					if (b == 0) { // low shelf
+						b0 =    A*((A+1.0f) - (A-1.0f)*cw + beta) ;
+						b1 =  2.0f*A*((A-1.0f) - (A+1.0f)*cw) ;
+						b2 =    A*((A+1.0f) - (A-1.0f)*cw - beta) ;
+						a0 =       (A+1.0f) + (A-1.0f)*cw + beta ;
+						a1 = -2.0f*((A-1.0f) + (A+1.0f)*cw) ;
+						a2 =       (A+1.0f) + (A-1.0f)*cw - beta ;
+					} else { // high shelf
+						b0 =    A*((A+1.0f) + (A-1.0f)*cw + beta) ;
+						b1 = -2.0f*A*((A-1.0f) + (A+1.0f)*cw) ;
+						b2 =    A*((A+1.0f) + (A-1.0f)*cw - beta) ;
+						a0 =       (A+1.0f) - (A-1.0f)*cw + beta ;
+						a1 =  2.0f*((A-1.0f) - (A+1.0f)*cw) ;
+						a2 =       (A+1.0f) - (A-1.0f)*cw - beta ;
+					}
+				}
+				float inv = 1.0f / a0 ;
+				eqB0[b]=b0*inv ; eqB1[b]=b1*inv ; eqB2[b]=b2*inv ;
+				eqA1[b]=a1*inv ; eqA2[b]=a2*inv ;
+			}
+		}
+
+		// Per-instrument LFO coefficients (computed once per render block).
+		bool lfoActive = (lfoOn_->GetInt()!=0) && (lfoTarget_->GetInt()!=0) ;
+		int lfoTarget = lfoTarget_->GetInt() ; // 0=off,1=cutoff,2=volume,3=pitch
+		float lfoInc=0.0f, lfoCutMax=0.0f, lfoVolMax=0.0f, lfoPitchMax=0.0f ;
+		if (lfoActive) {
+			float hz = 0.01f * powf(800.0f, rp->lfoRate_/255.0f) ;         // 0.01..8 Hz (FX-automatable)
+			lfoInc = hz / (44100.0f / KRATE_SAMPLE_COUNT) ;                 // phase step / K-rate
+			float depth = rp->lfoDepth_/255.0f ;                           // 0..1 (FX-automatable)
+			lfoCutMax = depth * (float)FP_ONE ;          // cutoff swing (fixed units)
+			lfoVolMax = depth * 127.0f * (float)FP_ONE ; // volume swing (i2fp units)
+			lfoPitchMax = depth * 0.06f ;                // +/- ~6% pitch (~1 semitone)
+		}
 
 		int count=size ; // number of samples to treat
 
@@ -801,6 +929,31 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 							fpSpeed=rp->speed_ ;
 						}
 					}
+
+					// LFO modulation (runs at K-rate, even without FX commands).
+					// Applied on top of any updater changes; targets the cheap,
+					// already-reassigned values (filter, volfactor, fpSpeed).
+					if (lfoActive) {
+						lfoPhase_[channel] += lfoInc ;
+						if (lfoPhase_[channel] >= 1.0f) lfoPhase_[channel] -= 1.0f ;
+						float lv = sinf(lfoPhase_[channel] * 6.2831853f) ; // -1..1
+						switch (lfoTarget) {
+						case 1: { // cutoff (the hypnotic filter sweep)
+							fixed c = rp->cutoff_ + (fixed)(lv*lfoCutMax) ;
+							if (c < 0) c = 0 ;
+							set_filter(channel,FLT_LOWPASS,c,rp->reso_,filterMix,bassyFilter) ;
+							filtering = (c<i2fp(1))||(rp->reso_>i2fp(0)) ;
+							break ;
+						}
+						case 2: // volume (tremolo)
+							volfactor = fp_mul(rp->volume_ + (fixed)(lv*lfoVolMax), volscale) ;
+							break ;
+						case 3: // pitch (wobble)
+							fpSpeed = fp_mul(rp->speed_, fl2fp(1.0f + lv*lfoPitchMax)) ;
+							if (rpReverse) fpSpeed = -fpSpeed ;
+							break ;
+						}
+					}
 			  }
 
 		    // get input sample to interpolate from
@@ -948,6 +1101,49 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 				if (feedbackPick>=feedbackEnd) {
 					feedbackPick=feedbackStart ;
 				} ;
+
+				// Per-instrument 3-band EQ (after filter, before compressor).
+				if (eqActive) {
+					float xs = (float)s2 ;
+					float xt = (float)t2 ;
+					for (int b = 0; b < 3; b++) {
+						if (!eqBandActive[b]) continue ;
+						float *zs = eqZ_[channel][0][b] ;
+						float ys = eqB0[b]*xs + zs[0] ;
+						zs[0] = eqB1[b]*xs - eqA1[b]*ys + zs[1] ;
+						zs[1] = eqB2[b]*xs - eqA2[b]*ys ;
+						xs = ys ;
+						float *zt = eqZ_[channel][1][b] ;
+						float yt = eqB0[b]*xt + zt[0] ;
+						zt[0] = eqB1[b]*xt - eqA1[b]*yt + zt[1] ;
+						zt[1] = eqB2[b]*xt - eqA2[b]*yt ;
+						xt = yt ;
+					}
+					s2 = (fixed)xs ;
+					t2 = (fixed)xt ;
+				}
+
+				// Per-instrument compressor (after filter, before pan).
+				if (compActive) {
+					const float INV_FS = 1.0f/1073741824.0f ; // 1 / i2fp(32768)
+					float l = ((float)t2) * INV_FS ;
+					float r = ((float)s2) * INV_FS ;
+					float al = (l<0)?-l:l ;
+					float ar = (r<0)?-r:r ;
+					float peak = (al>ar)?al:ar ;
+					// target gain (<=1), dB-accurate above the threshold
+					float gTarget = 1.0f ;
+					if (peak > compThreshLin) {
+						gTarget = powf(compThreshLin/peak, compSlope) ;
+					}
+					// attack when the gain drops (more reduction), release when it recovers
+					float cur = compGain_[channel] ;
+					cur += (gTarget - cur) * ((gTarget<cur)?compAtt:compRel) ;
+					compGain_[channel] = cur ;
+					float g = cur * compMakeupLin ;
+					s2 = (fixed)(((float)s2) * g) ;
+					t2 = (fixed)(((float)t2) * g) ;
+				}
 
 				// introduce panning & vol - store result
 
@@ -1415,6 +1611,16 @@ void SampleInstrument::ProcessCommand(int channel,FourCC cc,ushort value) {
 
     		}
 			break ;
+		case I_CMD_EQLO:
+			rp->eqLow_=(unsigned char)(value&0xFF) ; break ;
+		case I_CMD_EQMD:
+			rp->eqMid_=(unsigned char)(value&0xFF) ; break ;
+		case I_CMD_EQHI:
+			rp->eqHigh_=(unsigned char)(value&0xFF) ; break ;
+		case I_CMD_LFOR:
+			rp->lfoRate_=(unsigned char)(value&0xFF) ; break ;
+		case I_CMD_LFOD:
+			rp->lfoDepth_=(unsigned char)(value&0xFF) ; break ;
 		case I_CMD_CRSH:
 			{
     			unsigned char drive=(value>>8);

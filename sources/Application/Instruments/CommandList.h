@@ -34,6 +34,12 @@
 #define I_CMD_FBTN MAKE_FOURCC('F','B','T','N')
 #define I_CMD_SLCE MAKE_FOURCC('S','L','C','E')
 #define I_CMD_STOP MAKE_FOURCC('S','T','O','P')
+// Per-instrument EQ / LFO automation
+#define I_CMD_EQLO MAKE_FOURCC('E','Q','L','O')
+#define I_CMD_EQMD MAKE_FOURCC('E','Q','M','D')
+#define I_CMD_EQHI MAKE_FOURCC('E','Q','H','I')
+#define I_CMD_LFOR MAKE_FOURCC('L','F','O','R')
+#define I_CMD_LFOD MAKE_FOURCC('L','F','O','D')
 
 class CommandList {
 public:

@@ -54,6 +54,13 @@ struct renderParams {
 	FeedbackMode feedbackMode_ ;
 	unsigned char crush_ ; // crush
 	unsigned char drive_ ; // crush drive
+	// FX-automatable EQ / LFO values (per voice), seeded from the instrument
+	// at note trigger and modifiable by FX commands (EQLO/EQMD/EQHI/LFOR/LFOD).
+	unsigned char eqLow_ ;
+	unsigned char eqMid_ ;
+	unsigned char eqHigh_ ;
+	unsigned char lfoRate_ ;
+	unsigned char lfoDepth_ ;
 	fixed attenuate_ ; // filter attenuate
 
 	unsigned char downsample_ ; // downsampling

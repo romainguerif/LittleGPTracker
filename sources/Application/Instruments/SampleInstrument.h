@@ -49,6 +49,23 @@ enum SampleInstrumentLoopMode {
 #define SIP_PRINTFX MAKE_FOURCC('P', 'R', 'F', 'X')
 #define SIP_IR_PAD MAKE_FOURCC('I', 'R', 'P', 'D')
 #define SIP_IR_WET MAKE_FOURCC('I', 'R', 'W', 'T')
+// Per-instrument compressor (applied per voice, after the filter)
+#define SIP_COMP_ON      MAKE_FOURCC('C','P','O','N')
+#define SIP_COMP_THRESH  MAKE_FOURCC('C','P','T','H')
+#define SIP_COMP_RATIO   MAKE_FOURCC('C','P','R','A')
+#define SIP_COMP_ATTACK  MAKE_FOURCC('C','P','A','T')
+#define SIP_COMP_RELEASE MAKE_FOURCC('C','P','R','E')
+#define SIP_COMP_MAKEUP  MAKE_FOURCC('C','P','M','K')
+// Per-instrument EQ (3-band: low shelf / mid bell / high shelf)
+#define SIP_EQ_ON   MAKE_FOURCC('E','Q','O','N')
+#define SIP_EQ_LOW  MAKE_FOURCC('E','Q','L','O')
+#define SIP_EQ_MID  MAKE_FOURCC('E','Q','M','D')
+#define SIP_EQ_HIGH MAKE_FOURCC('E','Q','H','I')
+// Per-instrument LFO (modulates cutoff / volume / pitch) — hypnotic movement
+#define SIP_LFO_ON     MAKE_FOURCC('L','F','O','N')
+#define SIP_LFO_TARGET MAKE_FOURCC('L','F','T','G')
+#define SIP_LFO_RATE   MAKE_FOURCC('L','F','R','T')
+#define SIP_LFO_DEPTH  MAKE_FOURCC('L','F','D','P')
 
 #define FB_BUFFER_LENGTH 3500 // (in samples)
 
@@ -109,6 +126,10 @@ private:
 	   static int lastMidiNote_[SONG_CHANNEL_COUNT] ;
 	   static fixed lastSample_[SONG_CHANNEL_COUNT][2] ;
 	   static fixed feedback_[SONG_CHANNEL_COUNT][FB_BUFFER_LENGTH*2] ;
+	   static float compGain_[SONG_CHANNEL_COUNT] ; // smoothed compressor gain per channel
+	   // EQ biquad state: [channel][L/R][band 0..2][z1,z2]
+	   static float eqZ_[SONG_CHANNEL_COUNT][2][3][2] ;
+	   static float lfoPhase_[SONG_CHANNEL_COUNT] ; // LFO phase 0..1 per channel
 
 	   Variable *volume_ ;
 	   Variable *crush_ ;
@@ -135,6 +156,23 @@ private:
        Variable *printFx_;
        Variable *irPad_;
        Variable *irWet_;
+       // Per-instrument compressor (applied per voice, after the filter)
+       Variable *compOn_;
+       Variable *compThresh_;
+       Variable *compRatio_;
+       Variable *compAttack_;
+       Variable *compRelease_;
+       Variable *compMakeup_;
+       // Per-instrument 3-band EQ
+       Variable *eqOn_;
+       Variable *eqLow_;
+       Variable *eqMid_;
+       Variable *eqHigh_;
+       // Per-instrument LFO
+       Variable *lfoOn_;
+       Variable *lfoTarget_;
+       Variable *lfoRate_;
+       Variable *lfoDepth_;
 
        static bool useDirtyDownsampling_;
        char *fxPresets[4];

@@ -82,7 +82,7 @@ void View::drawMap() {
     	char buffer[5] ;
 		props.invert_=true ;
 		//row1
-		sprintf(buffer,"P G ");
+		sprintf(buffer,"P GF");
         DrawString(pos._x,pos._y,buffer,props) ;
 		pos._y++ ;		
 		//row2
@@ -129,6 +129,10 @@ void View::drawMap() {
 		case VT_GROOVE:
 			pos._x+=2;
 	        DrawString(pos._x,pos._y,"G",props) ;
+			break;
+		case VT_INSTRFX: // above instrument
+			pos._x+=3;
+	        DrawString(pos._x,pos._y,"F",props) ;
 			break;
 		default: //VT_SONG
 			pos._y+=1;

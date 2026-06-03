@@ -424,6 +424,14 @@ void InstrumentView::ProcessButtonMask(unsigned short mask,bool pressed) {
                     NotifyObservers(&ve);
                 }
 
+                if (mask & EPBM_UP) {
+                    // Go to the per-instrument FX page (compressor, EQ, ...)
+                    ViewType vt = VT_INSTRFX;
+                    ViewEvent ve(VET_SWITCH_VIEW, &vt);
+                    SetChanged();
+                    NotifyObservers(&ve);
+                }
+
                 // if (mask&EPBM_RIGHT) {
 
                 //	// Go to import sample
