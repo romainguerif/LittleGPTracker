@@ -129,6 +129,56 @@ static inline std::string* getHelpLegend(FourCC command) {
 			result[1].assign("immediately");
 			result[2].assign("");
 			break;
+		case I_CMD_EQLO:
+			result[0].assign("EqLOw:--bb");
+			result[1].assign("set low shelf to bb");
+			result[2].assign("80=flat 00=cut FF=boost");
+			break;
+		case I_CMD_EQMD:
+			result[0].assign("EqMiD:--bb");
+			result[1].assign("set mid band to bb");
+			result[2].assign("80=flat 00=cut FF=boost");
+			break;
+		case I_CMD_EQHI:
+			result[0].assign("EqHIgh:--bb");
+			result[1].assign("set high shelf to bb");
+			result[2].assign("80=flat 00=cut FF=boost");
+			break;
+		case I_CMD_LFOR:
+			result[0].assign("LFORate:--bb");
+			result[1].assign("set lfo rate to bb");
+			result[2].assign("00=slow FF=fast");
+			break;
+		case I_CMD_LFOD:
+			result[0].assign("LFODepth:--bb");
+			result[1].assign("set lfo depth to bb");
+			result[2].assign("00=none FF=max");
+			break;
+		case I_CMD_DSND:
+			result[0].assign("DelaySeND:--bb");
+			result[1].assign("delay send amount bb");
+			result[2].assign("00=dry FF=full send");
+			break;
+		case I_CMD_PROB:
+			result[0].assign("PROBability:aabb");
+			result[1].assign("play note aa out of bb");
+			result[2].assign("e.g. 0108 = 1 in 8");
+			break;
+		case I_CMD_RPAN:
+			result[0].assign("RandomPAN:--bb");
+			result[1].assign("randomize pan, spread bb");
+			result[2].assign("00=off FF=full width");
+			break;
+		case I_CMD_RPIT:
+			result[0].assign("RandomPITch:--bb");
+			result[1].assign("randomize pitch, range bb");
+			result[2].assign("00=off FF=wide");
+			break;
+		case I_CMD_RVOL:
+			result[0].assign("RandomVOLume:--bb");
+			result[1].assign("randomize volume, range bb");
+			result[2].assign("00=off FF=wide");
+			break;
 		default:
 
 			result[0].assign("");

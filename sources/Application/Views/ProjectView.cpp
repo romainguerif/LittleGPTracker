@@ -195,31 +195,33 @@ ProjectView::ProjectView(GUIWindow &w,ViewData *data):FieldView(w,data) {
                               project_->MAX_RENDER_MODE - 1, 1, 2);
     T_SimpleList<UIField>::Insert(field);
 
-    // Global dub delay (master)
-    position._y += 2;
-    Delay *dly = Delay::GetInstance();
-    field = new UIIntVarField(position, *dly->onVar_, "delay: %s", 0, 1, 1, 1);
-    T_SimpleList<UIField>::Insert(field);
-    position._y += 1;
-    field = new UIIntVarField(position, *dly->timeVar_, "  time:     %2.2X", 0, 255, 1, 0x10);
-    T_SimpleList<UIField>::Insert(field);
-    position._y += 1;
-    field = new UIIntVarField(position, *dly->feedbackVar_, "  feedback: %2.2X", 0, 255, 1, 0x10);
-    T_SimpleList<UIField>::Insert(field);
-    position._y += 1;
-    field = new UIIntVarField(position, *dly->toneVar_, "  tone:     %2.2X", 0, 255, 1, 0x10);
-    T_SimpleList<UIField>::Insert(field);
-    position._y += 1;
-    field = new UIIntVarField(position, *dly->wetVar_, "  wet:      %2.2X", 0, 255, 1, 0x10);
-    T_SimpleList<UIField>::Insert(field);
-    position._y += 1;
-    field = new UIIntVarField(position, *dly->pingpongVar_, "  pingpong: %s", 0, 1, 1, 1);
-    T_SimpleList<UIField>::Insert(field);
-
     position._y += 2;
     a1 = new UIActionField("Exit", ACTION_QUIT, position);
     a1->AddObserver(*this);
     T_SimpleList<UIField>::Insert(a1);
+
+    // Global dub-delay bus: laid out as a right-hand column so it does not push
+    // Exit (and the rest of the page) off the bottom of the 40x30 screen.
+    GUIPoint dpos = GetAnchor();
+    dpos._x += 18;
+    Delay *dly = Delay::GetInstance();
+    field = new UIIntVarField(dpos, *dly->onVar_, "delay: %s", 0, 1, 1, 1);
+    T_SimpleList<UIField>::Insert(field);
+    dpos._y += 1;
+    field = new UIIntVarField(dpos, *dly->timeVar_, "time: %2.2X", 0, 255, 1, 0x10);
+    T_SimpleList<UIField>::Insert(field);
+    dpos._y += 1;
+    field = new UIIntVarField(dpos, *dly->feedbackVar_, "fdbk: %2.2X", 0, 255, 1, 0x10);
+    T_SimpleList<UIField>::Insert(field);
+    dpos._y += 1;
+    field = new UIIntVarField(dpos, *dly->toneVar_, "tone: %2.2X", 0, 255, 1, 0x10);
+    T_SimpleList<UIField>::Insert(field);
+    dpos._y += 1;
+    field = new UIIntVarField(dpos, *dly->wetVar_, "wet:  %2.2X", 0, 255, 1, 0x10);
+    T_SimpleList<UIField>::Insert(field);
+    dpos._y += 1;
+    field = new UIIntVarField(dpos, *dly->pingpongVar_, "ping: %s", 0, 1, 1, 1);
+    T_SimpleList<UIField>::Insert(field);
 
 }
 
