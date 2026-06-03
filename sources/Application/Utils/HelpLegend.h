@@ -5,8 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-static inline std::string* getHelpLegend(FourCC command) {
-	std::string* result = new std::string[3];
+// Fills the caller-provided result[3] with the help text for a command.
+// (Previously this returned a heap-allocated array that callers never freed,
+//  leaking 3 std::strings on every redraw -> long-session slowdown.)
+static inline void getHelpLegend(FourCC command, std::string* result) {
+	result[0].assign("");
+	result[1].assign("");
 	result[2].assign("bb at speed aa");
 	switch (command) {
 		case I_CMD_KILL:
@@ -186,7 +190,6 @@ static inline std::string* getHelpLegend(FourCC command) {
 			result[2].assign("");
 		break;
 	}
-	return result;
 }
 
 #endif //_HELP_LEGEND_H_

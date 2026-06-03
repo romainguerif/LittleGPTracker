@@ -121,6 +121,19 @@ SDLGUIWindowImp::SDLGUIWindowImp(GUICreateWindowParams &p)
 
     NAssert(surface_) ;
 
+    // Wipe the whole window (including the letterbox borders around the app)
+    // to black so the PortMaster / port-selection menu underneath does not
+    // "ghost" through the regions the app never repaints. Repeat across the
+    // back buffers the display may be cycling through.
+    if (!framebuffer_)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            SDL_FillRect(surface_, NULL, SDL_MapRGB(surface_->format, 0, 0, 0)) ;
+            SDL_UpdateWindowSurface(window_) ;
+        }
+    }
+
     Uint32 rmask, gmask, bmask, amask;
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
@@ -495,22 +508,14 @@ void SDLGUIWindowImp::Unlock()
 
 void SDLGUIWindowImp::Flush()
 {
-    // blit partial updates on resource constrained platforms
+    // Push the WHOLE frame each time something changed. Partial dirty-rect
+    // updates left stale content behind (port-menu ghost) and tore on the
+    // Trimui's multi-buffered display because each buffer only received the
+    // rects drawn while it happened to be current. A full surface update is
+    // cheap here and keeps every back buffer consistent.
     if ((!framebuffer_)&&(updateCount_!=0))
     {
-        if (updateCount_<MAX_OVERLAYS)
-        {
-            SDL_UpdateWindowSurfaceRects(window_,updateRects_,updateCount_);
-        }
-        else
-        {
-            SDL_Rect updateRect;
-            updateRect.x = screenRect_.Left();
-            updateRect.y = screenRect_.Top();
-            updateRect.w = screenRect_.Width();
-            updateRect.h = screenRect_.Height();
-            SDL_UpdateWindowSurfaceRects(window_,&updateRect,1);
-        }
+        SDL_UpdateWindowSurface(window_);
     }
     updateCount_=0;
 }

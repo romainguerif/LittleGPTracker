@@ -165,7 +165,8 @@ void CommandSelectorModal::DrawView() {
     props.invert_ = false;
     SetColor(CD_NORMAL);
 
-    std::string *cmdStr = getHelpLegend(selectedCommand_);
+    std::string cmdStr[3];
+    getHelpLegend(selectedCommand_, cmdStr);
     for (int i = 0; i < 3; i++) {
         // Clear legend area first so shorter lines don't leave stale text.
         View::DrawString(10, i, "                              ", props);

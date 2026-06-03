@@ -1536,7 +1536,8 @@ void PhraseView::OnPlayerUpdate(PlayerEventType eventType, unsigned int tick) {
 
 void PhraseView::printHelpLegend(FourCC command, GUITextProperties props) {
     SetColor(CD_NORMAL);
-    std::string *cmdStr = getHelpLegend(command);
+    std::string cmdStr[3];
+    getHelpLegend(command, cmdStr);
     DrawString(10, 0, cmdStr[0].c_str(), props);
     DrawString(10, 1, cmdStr[1].c_str(), props);
     DrawString(10, 2, cmdStr[2].c_str(), props);

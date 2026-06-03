@@ -428,6 +428,8 @@ void AppWindow::CloseProject() {
     SAFE_DELETE(_instrumentView);
     SAFE_DELETE(_instrumentFXView);
     SAFE_DELETE(_tableView);
+    SAFE_DELETE(_grooveView);
+    SAFE_DELETE(_mixerView);
 
     UIController *controller = UIController::GetInstance();
     controller->Reset();
