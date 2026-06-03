@@ -25,6 +25,16 @@ float SampleInstrument::lfoPhase_[SONG_CHANNEL_COUNT] ;
 
 bool SampleInstrument::useDirtyDownsampling_ = false;
 
+// Small self-contained RNG for the random FX commands (RPAN/RPIT/RVOL).
+static unsigned int s_siRng = 0x2545F491u ;
+static int siRandSigned(int range) {
+    s_siRng ^= s_siRng << 13 ;
+    s_siRng ^= s_siRng >> 17 ;
+    s_siRng ^= s_siRng << 5 ;
+    if (range <= 0) return 0 ;
+    return (int)(s_siRng % (unsigned)(2*range+1)) - range ;
+}
+
 #define SHOULD_KILL_CLICKS false
 
 int SampleInstrument::lastMidiNote_[SONG_CHANNEL_COUNT]= {
@@ -1621,6 +1631,28 @@ void SampleInstrument::ProcessCommand(int channel,FourCC cc,ushort value) {
 			rp->lfoRate_=(unsigned char)(value&0xFF) ; break ;
 		case I_CMD_LFOD:
 			rp->lfoDepth_=(unsigned char)(value&0xFF) ; break ;
+		case I_CMD_RPAN: { // random pan spread
+			int amt=(value&0xFF) ;
+			rp->basePan_ += i2fp(siRandSigned(amt/2)) ;
+			if (rp->basePan_<0) rp->basePan_=0 ;
+			if (rp->basePan_>i2fp(254)) rp->basePan_=i2fp(254) ;
+			rp->pan_=rp->basePan_ ;
+			break ;
+		}
+		case I_CMD_RPIT: { // random pitch spread (+/- ~1 semitone at FF)
+			int amt=(value&0xFF) ;
+			float f=siRandSigned(1000)/1000.0f ;
+			rp->baseSpeed_=fp_mul(rp->baseSpeed_, fl2fp(1.0f + f*(amt/255.0f)*0.06f)) ;
+			rp->speed_=rp->baseSpeed_ ;
+			break ;
+		}
+		case I_CMD_RVOL: { // random volume spread
+			int amt=(value&0xFF) ;
+			rp->baseVolume_ += i2fp(siRandSigned(amt/2)) ;
+			if (rp->baseVolume_<0) rp->baseVolume_=0 ;
+			rp->volume_=rp->baseVolume_ ;
+			break ;
+		}
 		case I_CMD_CRSH:
 			{
     			unsigned char drive=(value>>8);

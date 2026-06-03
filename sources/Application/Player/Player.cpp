@@ -809,6 +809,15 @@ void Player::updatePhrasePos(int pos,int channel) {
 	}
 }
 
+// Self-contained RNG for note probability (PROB command).
+static unsigned int s_playerRng = 0x9E3779B9u ;
+static unsigned int playerRand() {
+	s_playerRng ^= s_playerRng << 13 ;
+	s_playerRng ^= s_playerRng >> 17 ;
+	s_playerRng ^= s_playerRng << 5 ;
+	return s_playerRng ;
+}
+
 void Player::playCursorPosition(int channel) {
 
 	int pos=viewData_->phrasePlayPos_[channel] ;
@@ -822,6 +831,23 @@ void Player::playCursorPosition(int channel) {
 		Phrase *phrase=song->phrase_ ;
 		unsigned char note=phrase->note_[16*currentPhrase+pos]  ;
 		unsigned char instr=phrase->instr_[16*currentPhrase+pos]  ;
+
+		// Note probability: PROB command, value HH:LL = play HH out of LL.
+		if (note!=0xFF) {
+			ushort pr=0 ; bool hasProb=false ;
+			if (phrase->cmd1_[16*currentPhrase+pos]==I_CMD_PROB) {
+				pr=phrase->param1_[16*currentPhrase+pos] ; hasProb=true ;
+			} else if (phrase->cmd2_[16*currentPhrase+pos]==I_CMD_PROB) {
+				pr=phrase->param2_[16*currentPhrase+pos] ; hasProb=true ;
+			}
+			if (hasProb) {
+				int num=(pr>>8)&0xFF ;
+				int den=pr&0xFF ;
+				if (den>0 && (int)(playerRand()%(unsigned)den) >= num) {
+					note=0xFF ; // roll failed -> skip this note
+				}
+			}
+		}
 
 		TableHolder *th=TableHolder::GetInstance() ;
 		TablePlayback &tpb=TablePlayback::GetTablePlayback(channel) ;

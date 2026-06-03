@@ -40,6 +40,11 @@
 #define I_CMD_EQHI MAKE_FOURCC('E','Q','H','I')
 #define I_CMD_LFOR MAKE_FOURCC('L','F','O','R')
 #define I_CMD_LFOD MAKE_FOURCC('L','F','O','D')
+// Randomization
+#define I_CMD_PROB MAKE_FOURCC('P','R','O','B') // note probability (HH:LL = HH-in-LL)
+#define I_CMD_RPAN MAKE_FOURCC('R','P','A','N') // random pan spread
+#define I_CMD_RPIT MAKE_FOURCC('R','P','I','T') // random pitch spread
+#define I_CMD_RVOL MAKE_FOURCC('R','V','O','L') // random volume spread
 
 class CommandList {
 public:
