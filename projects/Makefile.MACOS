@@ -1,0 +1,39 @@
+-include $(PWD)/rules_base
+
+# Native macOS (Apple Silicon / Intel) build using Homebrew SDL2 + CoreAudio/CoreMIDI.
+# Builds a plain executable (../lgpt.mac), no Xcode required.
+#   brew install sdl2
+#   make PLATFORM=MACOS
+
+# config
+DEFINES := \
+	-DPLATFORM_$(PLATFORM) \
+	-D_64BIT \
+	-DCPP_MEMORY \
+	-D__MACOSX_CORE__ \
+	-DSDL2 \
+	-DRTMIDI \
+	-D_FEAT_MIDI_LOCK
+
+SDL_CFLAGS := $(shell pkg-config sdl2 --cflags)
+SDL_LIBS := $(shell pkg-config sdl2 --libs)
+
+# optimization
+OPT_FLAGS := -O3
+#For debugging
+#OPT_FLAGS := -g
+
+INCLUDES := $(SDL_CFLAGS) -I$(PWD)/../sources
+CFLAGS := $(OPT_FLAGS) $(DEFINES) $(INCLUDES) -Wall -Wno-deprecated-declarations
+CXXFLAGS := $(CFLAGS) -std=gnu++14
+LIBS := $(SDL_LIBS) \
+	-framework CoreAudio \
+	-framework CoreFoundation \
+	-framework CoreMIDI \
+	-framework Cocoa
+OUTPUT := ../lgpt
+EXTENSION := mac
+
+# build rule
+%.mac: $(OFILES)
+	$(CXX) $(LDFLAGS) -o $@ $(OFILES) $(LIBS)

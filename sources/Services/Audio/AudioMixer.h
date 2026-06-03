@@ -38,5 +38,10 @@ private:
   int softclipGain_;
   int masterVolume_;
   bool clipped_;
+  // Reusable scratch mix buffer, grown on demand and freed only at
+  // destruction. Avoids a malloc/free on every Render() in the real-time
+  // audio path (a source of jitter / underruns on weak devices).
+  fixed *mixBuffer_;
+  int mixBufferSamples_;
 } ;
 #endif

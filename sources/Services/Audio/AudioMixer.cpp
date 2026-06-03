@@ -16,6 +16,8 @@ AudioMixer::AudioMixer(const char *name):
     softclipGain_ = 0 ;
 	masterVolume_ = 100 ;
 	clipped_ = false ;
+	mixBuffer_ = 0 ;
+	mixBufferSamples_ = 0 ;
 	
 	// Precalculate constant values for softclipping algorithm
 	softClipData_[0].alpha = 1.45f; // -1.5db (approx.)
@@ -41,6 +43,7 @@ AudioMixer::AudioMixer(const char *name):
 } ;
 
 AudioMixer::~AudioMixer() {
+	SAFE_FREE(mixBuffer_) ;
 }
 
 void AudioMixer::SetFileRenderer(const char *path) {
@@ -67,20 +70,23 @@ void AudioMixer::EnableRendering(bool enable) {
 bool AudioMixer::Render(fixed *buffer,int samplecount) {
     clipped_ = false;
 
-    fixed *mixBuffer = 0;
     bool gotData = false;
     IteratorPtr<AudioModule> it(GetIterator());
     for (it->Begin(); !it->IsDone(); it->Next()) {
         AudioModule &current = it->CurrentItem();
         if (!gotData) {
-            gotData=current.Render(buffer,samplecount) ;           
+            gotData=current.Render(buffer,samplecount) ;
          } else {
-            if (!mixBuffer) {
-               mixBuffer=(fixed *)malloc(samplecount*2*sizeof(fixed)) ;
-            } 
-            if (current.Render(mixBuffer,samplecount)) {
+            // Grow the reusable scratch buffer only when needed; no per-call
+            // malloc/free in the audio thread.
+            if (mixBufferSamples_ < samplecount) {
+               SAFE_FREE(mixBuffer_) ;
+               mixBuffer_=(fixed *)malloc(samplecount*2*sizeof(fixed)) ;
+               mixBufferSamples_=samplecount ;
+            }
+            if (current.Render(mixBuffer_,samplecount)) {
                fixed *dst=buffer ;
-               fixed *src=mixBuffer ;
+               fixed *src=mixBuffer_ ;
                int count=samplecount*2 ;
                while (count--) {
                  *dst+=*src ;
@@ -118,7 +124,6 @@ bool AudioMixer::Render(fixed *buffer,int samplecount) {
 		} ;
 		writer_->AddBuffer(buffer,samplecount) ;
 	}
-     SAFE_FREE(mixBuffer) ;
      return gotData ;
 } ;
 
