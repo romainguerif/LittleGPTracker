@@ -90,7 +90,7 @@ void View::drawMap() {
         DrawString(pos._x,pos._y,buffer,props) ;
 		pos._y++ ;		
 		//row3
-		sprintf(buffer,"  TT");
+		sprintf(buffer,"X TT");
         DrawString(pos._x,pos._y,buffer,props) ;
 
 		//draw current screen on map
@@ -133,6 +133,10 @@ void View::drawMap() {
 		case VT_INSTRFX: // above instrument
 			pos._x+=3;
 	        DrawString(pos._x,pos._y,"F",props) ;
+			break;
+		case VT_MASTERFX: // below song
+			pos._y+=2;
+	        DrawString(pos._x,pos._y,"X",props) ;
 			break;
 		default: //VT_SONG
 			pos._y+=1;

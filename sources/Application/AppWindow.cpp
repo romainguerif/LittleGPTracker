@@ -1,4 +1,5 @@
 #include "AppWindow.h"
+#include "Application/Model/Theme.h"
 #include "Application/Commands/ApplicationCommandDispatcher.h"
 #include "Application/Commands/EventDispatcher.h"
 #include "Application/Instruments/SamplePool.h"
@@ -65,6 +66,27 @@ void AppWindow::defineColor(const char *colorName, GUIColor &color) {
     }
 }
 
+void AppWindow::ApplyTheme(int index) {
+    if (index < 0 || index >= THEME_COUNT) {
+        return;
+    }
+    const ThemeColors &t = themeColors[index];
+    backgroundColor_ = GUIColor(t.bg[0], t.bg[1], t.bg[2]);
+    normalColor_ = GUIColor(t.fg[0], t.fg[1], t.fg[2]);
+    borderColor_ = GUIColor(t.border[0], t.border[1], t.border[2]);
+    songviewfeColor_ = GUIColor(t.svfe[0], t.svfe[1], t.svfe[2]);
+    songview00Color_ = GUIColor(t.sv00[0], t.sv00[1], t.sv00[2]);
+    highlightColor_ = GUIColor(t.hi1[0], t.hi1[1], t.hi1[2]);
+    highlight2Color_ = GUIColor(t.hi2[0], t.hi2[1], t.hi2[2]);
+    consoleColor_ = GUIColor(t.console[0], t.console[1], t.console[2]);
+    cursorColor_ = GUIColor(t.cursor[0], t.cursor[1], t.cursor[2]);
+    playColor_ = GUIColor(t.play[0], t.play[1], t.play[2]);
+    muteColor_ = GUIColor(t.mute[0], t.mute[1], t.mute[2]);
+    rownumberColor_ = GUIColor(t.row1[0], t.row1[1], t.row1[2]);
+    rownumber2Color_ = GUIColor(t.row2[0], t.row2[1], t.row2[2]);
+    majorbeatColor_ = GUIColor(t.beat[0], t.beat[1], t.beat[2]);
+}
+
 AppWindow::AppWindow(I_GUIWindowImp &imp) : GUIWindow(imp) {
 
     instance = this;
@@ -81,6 +103,7 @@ AppWindow::AppWindow(I_GUIWindowImp &imp) : GUIWindow(imp) {
     _projectView = 0;
     _instrumentView = 0;
     _instrumentFXView = 0;
+    _masterFXView = 0;
     _tableView = 0;
     _nullView = 0;
     _mixerView = 0;
@@ -383,6 +406,9 @@ void AppWindow::LoadProject(const Path &p) {
     _instrumentFXView = new InstrumentFXView((*this), _viewData);
     _instrumentFXView->AddObserver((*this));
 
+    _masterFXView = new MasterFXView((*this), _viewData);
+    _masterFXView->AddObserver((*this));
+
     _tableView = new TableView((*this), _viewData);
     _tableView->AddObserver((*this));
 
@@ -391,6 +417,12 @@ void AppWindow::LoadProject(const Path &p) {
 
     _mixerView = new MixerView((*this), _viewData);
     _mixerView->AddObserver(*this);
+
+    // Apply the project's saved colour theme before the first draw.
+    Variable *themeVar = project->FindVariable(VAR_THEME);
+    if (themeVar) {
+        ApplyTheme(themeVar->GetInt());
+    }
 
     _currentView = _songView;
     _currentView->OnFocus();
@@ -427,6 +459,7 @@ void AppWindow::CloseProject() {
     SAFE_DELETE(_projectView);
     SAFE_DELETE(_instrumentView);
     SAFE_DELETE(_instrumentFXView);
+    SAFE_DELETE(_masterFXView);
     SAFE_DELETE(_tableView);
     SAFE_DELETE(_grooveView);
     SAFE_DELETE(_mixerView);
@@ -564,6 +597,9 @@ void AppWindow::Update(Observable &o, I_ObservableData *d) {
             break;
         case VT_INSTRFX:
             _currentView = _instrumentFXView;
+            break;
+        case VT_MASTERFX:
+            _currentView = _masterFXView;
             break;
         case VT_TABLE:
             _currentView = _tableView;

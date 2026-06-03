@@ -18,6 +18,7 @@
 #define VAR_PREGAIN   		MAKE_FOURCC('P', 'R', 'G', 'N')
 #define VAR_SCALE 			MAKE_FOURCC('S', 'C', 'A', 'L')
 #define VAR_RENDER MAKE_FOURCC('R', 'N', 'D', 'R')
+#define VAR_THEME 			MAKE_FOURCC('T', 'H', 'E', 'M')
 
 #define PROJECT_NUMBER "1"
 #define PROJECT_RELEASE "6"

@@ -761,7 +761,7 @@ void SongView::processNormalButtonMask(unsigned int mask) {
                 }
 
                 if (mask & EPBM_DOWN) {
-                    ViewType vt = VT_MIXER;
+                    ViewType vt = VT_MASTERFX;
                     ViewEvent ve(VET_SWITCH_VIEW, &vt);
                     SetChanged();
                     NotifyObservers(&ve);
@@ -876,7 +876,7 @@ void SongView::processSelectionButtonMask(unsigned int mask) {
                 }
 
                 if (mask & EPBM_DOWN) {
-                    ViewType vt = VT_MIXER;
+                    ViewType vt = VT_MASTERFX;
                     ViewEvent ve(VET_SWITCH_VIEW, &vt);
                     SetChanged();
                     NotifyObservers(&ve);

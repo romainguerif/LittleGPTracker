@@ -7,6 +7,7 @@
 #include "Application/Views/GrooveView.h"
 #include "Application/Views/InstrumentView.h"
 #include "Application/Views/InstrumentFXView.h"
+#include "Application/Views/MasterFXView.h"
 #include "Application/Views/MixerView.h"
 #include "Application/Views/NullView.h"
 #include "Application/Views/PhraseView.h"
@@ -36,6 +37,8 @@ class AppWindow : public GUIWindow, I_Observer, Status {
     virtual void ClearRect(GUIRect &rect);
     virtual void SetColor(ColorDefinition cd);
     void SetDirty();
+    // Apply a built-in colour theme (index into Theme.h's themeColors).
+    static void ApplyTheme(int index);
 
   protected: // GUIWindow implementation
     virtual bool onEvent(GUIEvent &event);
@@ -70,6 +73,7 @@ class AppWindow : public GUIWindow, I_Observer, Status {
     ProjectView *_projectView;
     InstrumentView *_instrumentView;
     InstrumentFXView *_instrumentFXView;
+    MasterFXView *_masterFXView;
     TableView *_tableView;
     GrooveView *_grooveView;
     NullView *_nullView;

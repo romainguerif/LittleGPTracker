@@ -14,6 +14,7 @@
 #include "Table.h"
 
 #include "ProjectDatas.h"
+#include "Theme.h"
 #include <math.h>
 #include <string.h>
 
@@ -69,6 +70,9 @@ tempoNudge_(0)
     Variable *renderMode =
         new Variable("renderMode", VAR_RENDER, renderModes, MAX_RENDER_MODE, 0);
     this->Insert(renderMode);
+    Variable *theme =
+        new Variable("theme", VAR_THEME, themeNames, THEME_COUNT, 0);
+    this->Insert(theme);
 
 // Reload the midi device list
 

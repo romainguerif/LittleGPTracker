@@ -1,6 +1,7 @@
 #include "ProjectView.h"
+#include "Application/AppWindow.h"
+#include "Application/Model/Theme.h"
 #include "Application/Mixer/MixerService.h"
-#include "Services/Audio/Delay.h"
 #include "Application/Model/ProjectDatas.h"
 #include "Application/Model/Scale.h"
 #include "Application/Persistency/PersistencyService.h"
@@ -108,6 +109,9 @@ ProjectView::ProjectView(GUIWindow &w,ViewData *data):FieldView(w,data) {
 
 	project_=data->project_ ;
 
+	Variable *themeV=project_->FindVariable(VAR_THEME) ;
+	lastTheme_ = themeV ? themeV->GetInt() : 0 ;
+
 	GUIPoint position=GetAnchor() ;
 	
 	Variable *v=project_->FindVariable(VAR_TEMPO) ;
@@ -195,33 +199,17 @@ ProjectView::ProjectView(GUIWindow &w,ViewData *data):FieldView(w,data) {
                               project_->MAX_RENDER_MODE - 1, 1, 2);
     T_SimpleList<UIField>::Insert(field);
 
+    position._y += 1;
+    v = project_->FindVariable(VAR_THEME);
+    NAssert(v);
+    field = new UIIntVarField(position, *v, "Theme: %s", 0,
+                              THEME_COUNT - 1, 1, 1);
+    T_SimpleList<UIField>::Insert(field);
+
     position._y += 2;
     a1 = new UIActionField("Exit", ACTION_QUIT, position);
     a1->AddObserver(*this);
     T_SimpleList<UIField>::Insert(a1);
-
-    // Global dub-delay bus: laid out as a right-hand column so it does not push
-    // Exit (and the rest of the page) off the bottom of the 40x30 screen.
-    GUIPoint dpos = GetAnchor();
-    dpos._x += 18;
-    Delay *dly = Delay::GetInstance();
-    field = new UIIntVarField(dpos, *dly->onVar_, "delay: %s", 0, 1, 1, 1);
-    T_SimpleList<UIField>::Insert(field);
-    dpos._y += 1;
-    field = new UIIntVarField(dpos, *dly->timeVar_, "time: %2.2X", 0, 255, 1, 0x10);
-    T_SimpleList<UIField>::Insert(field);
-    dpos._y += 1;
-    field = new UIIntVarField(dpos, *dly->feedbackVar_, "fdbk: %2.2X", 0, 255, 1, 0x10);
-    T_SimpleList<UIField>::Insert(field);
-    dpos._y += 1;
-    field = new UIIntVarField(dpos, *dly->toneVar_, "tone: %2.2X", 0, 255, 1, 0x10);
-    T_SimpleList<UIField>::Insert(field);
-    dpos._y += 1;
-    field = new UIIntVarField(dpos, *dly->wetVar_, "wet:  %2.2X", 0, 255, 1, 0x10);
-    T_SimpleList<UIField>::Insert(field);
-    dpos._y += 1;
-    field = new UIIntVarField(dpos, *dly->pingpongVar_, "ping: %s", 0, 1, 1, 1);
-    T_SimpleList<UIField>::Insert(field);
 
 }
 
@@ -234,6 +222,14 @@ void ProjectView::ProcessButtonMask(unsigned short mask,bool pressed) {
         return;
 
     FieldView::ProcessButtonMask(mask);
+
+    // Live theme switch: if the Theme field changed, repaint with the new palette.
+    Variable *themeV = project_->FindVariable(VAR_THEME);
+    if (themeV && themeV->GetInt() != lastTheme_) {
+        lastTheme_ = themeV->GetInt();
+        AppWindow::ApplyTheme(lastTheme_);
+        isDirty_ = true;
+    }
 
     if (mask & EPBM_R) {
         if (mask&EPBM_DOWN) {

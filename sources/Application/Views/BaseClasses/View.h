@@ -41,7 +41,8 @@ enum ViewType {
     VT_TABLE2, // Table screen under instrument
     VT_GROOVE,
     VT_MIXER,
-    VT_INSTRFX // Per-instrument FX page (compressor, EQ, ...)
+    VT_INSTRFX, // Per-instrument FX page (compressor, EQ, ...)
+    VT_MASTERFX // Master/global FX page (below Song): dub delay, ...
 };
 
 enum ViewMode {

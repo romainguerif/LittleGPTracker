@@ -32,5 +32,6 @@ private:
   unsigned long lastTick_;
   unsigned long lastClock_;
   UIField *tempoField_;
+  int lastTheme_; // last applied theme index (for live theme switching)
 } ;
 #endif
