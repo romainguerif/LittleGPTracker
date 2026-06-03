@@ -8,6 +8,7 @@
 #include "Application/Views/InstrumentView.h"
 #include "Application/Views/InstrumentFXView.h"
 #include "Application/Views/MasterFXView.h"
+#include "Application/Views/ControlsView.h"
 #include "Application/Views/MixerView.h"
 #include "Application/Views/NullView.h"
 #include "Application/Views/PhraseView.h"
@@ -78,6 +79,7 @@ class AppWindow : public GUIWindow, I_Observer, Status {
     InstrumentView *_instrumentView;
     InstrumentFXView *_instrumentFXView;
     MasterFXView *_masterFXView;
+    ControlsView *_controlsView;
     TableView *_tableView;
     GrooveView *_grooveView;
     NullView *_nullView;

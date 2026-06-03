@@ -42,7 +42,8 @@ enum ViewType {
     VT_GROOVE,
     VT_MIXER,
     VT_INSTRFX, // Per-instrument FX page (compressor, EQ, ...)
-    VT_MASTERFX // Master/global FX page (below Song): dub delay, ...
+    VT_MASTERFX, // Master/global FX page (below Song): dub delay, ...
+    VT_CONTROLS // Read-only controls cheat-sheet (from Project page)
 };
 
 enum ViewMode {

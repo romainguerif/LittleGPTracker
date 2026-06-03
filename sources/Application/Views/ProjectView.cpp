@@ -23,6 +23,7 @@
 #define ACTION_QUIT             MAKE_FOURCC('Q','U','I','T')
 #define ACTION_PURGE_INSTRUMENT MAKE_FOURCC('P','R','G','I')
 #define ACTION_TEMPO_CHANGED    MAKE_FOURCC('T','E','M','P')
+#define ACTION_CONTROLS         MAKE_FOURCC('C','T','R','L')
 
 static void SaveAsProjectCallback(View &v,ModalView &dialog) {
 
@@ -209,6 +210,11 @@ ProjectView::ProjectView(GUIWindow &w,ViewData *data):FieldView(w,data) {
                               THEME_COUNT - 1, 1, 1);
     T_SimpleList<UIField>::Insert(field);
 
+    position._y += 1;
+    a1 = new UIActionField("Controls", ACTION_CONTROLS, position);
+    a1->AddObserver(*this);
+    T_SimpleList<UIField>::Insert(a1);
+
     position._y += 2;
     a1 = new UIActionField("Exit", ACTION_QUIT, position);
     a1->AddObserver(*this);
@@ -351,6 +357,15 @@ void ProjectView::Update(Observable &,I_ObservableData *data) {
                                             MBBF_YES | MBBF_NO);
             DoModal(mb, QuitCallback);
             break;
+        }
+        case ACTION_CONTROLS: {
+            // Open the controls cheat-sheet. Return right away so the trailing
+            // focus->Draw() below doesn't paint a stray field over that page.
+            ViewType vt = VT_CONTROLS;
+            ViewEvent ve(VET_SWITCH_VIEW, &vt);
+            SetChanged();
+            NotifyObservers(&ve);
+            return;
         }
         case ACTION_TEMPO_CHANGED:
 			break ;

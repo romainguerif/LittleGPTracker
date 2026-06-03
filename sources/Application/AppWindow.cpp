@@ -152,6 +152,7 @@ AppWindow::AppWindow(I_GUIWindowImp &imp) : GUIWindow(imp) {
     _instrumentView = 0;
     _instrumentFXView = 0;
     _masterFXView = 0;
+    _controlsView = 0;
     _tableView = 0;
     _nullView = 0;
     _mixerView = 0;
@@ -467,6 +468,9 @@ void AppWindow::LoadProject(const Path &p) {
     _masterFXView = new MasterFXView((*this), _viewData);
     _masterFXView->AddObserver((*this));
 
+    _controlsView = new ControlsView((*this), _viewData);
+    _controlsView->AddObserver((*this));
+
     _tableView = new TableView((*this), _viewData);
     _tableView->AddObserver((*this));
 
@@ -534,6 +538,7 @@ void AppWindow::CloseProject() {
     SAFE_DELETE(_instrumentView);
     SAFE_DELETE(_instrumentFXView);
     SAFE_DELETE(_masterFXView);
+    SAFE_DELETE(_controlsView);
     SAFE_DELETE(_tableView);
     SAFE_DELETE(_grooveView);
     SAFE_DELETE(_mixerView);
@@ -676,6 +681,9 @@ void AppWindow::Update(Observable &o, I_ObservableData *d) {
             break;
         case VT_MASTERFX:
             _currentView = _masterFXView;
+            break;
+        case VT_CONTROLS:
+            _currentView = _controlsView;
             break;
         case VT_TABLE:
             _currentView = _tableView;
