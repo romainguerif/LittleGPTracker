@@ -43,10 +43,16 @@ bool PersistencyService::Load() {
 	file->Seek(0,SEEK_END) ;
 	int length=file->Tell() ;
 
-	unsigned char *compBuffer=(unsigned char *)SYS_MALLOC(length) ;
+	// +1 and a trailing NUL: TiXmlDocument::Parse() treats the buffer as a
+	// C string and runs until it sees '\0'. Without the terminator the parser
+	// reads past the end of the allocation (heap-buffer-overflow) -- which, with
+	// the wrong file size / heap layout, corrupts the heap and crashes ("malloc:
+	// unsorted double linked list corrupted") on a later load.
+	unsigned char *compBuffer=(unsigned char *)SYS_MALLOC(length+1) ;
 
   file->Seek(0,SEEK_SET) ;
 	file->Read(compBuffer,1,length) ;
+	compBuffer[length]=0 ;
 	file->Close();
 	delete file ;
 	
@@ -60,13 +66,14 @@ bool PersistencyService::Load() {
 		
 		// Allocate a buffer to decompress data
 		
-		unsigned char *xmlSource=(unsigned char *)SYS_MALLOC(fullLength) ;
+		unsigned char *xmlSource=(unsigned char *)SYS_MALLOC(fullLength+1) ;
 		if (!xmlSource) {
 			Trace::Error("could not allocate space for %d bytes") ;
 			return false ;
 		}
 
     LZ_Uncompress(compBuffer+offset,xmlSource,length-offset);
+		xmlSource[fullLength]=0 ; // NUL-terminate for TiXml::Parse (same overflow)
 
 		// Initialize XML document on decompressed buffer
 		doc.Parse((char *)xmlSource) ;

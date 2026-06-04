@@ -17,6 +17,7 @@
 #include "System/FileSystem/FileSystem.h"
 #include "Views/UIController.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 AppWindow *instance = 0;
