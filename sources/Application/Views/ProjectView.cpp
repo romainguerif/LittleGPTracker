@@ -347,11 +347,12 @@ void ProjectView::Update(Observable &,I_ObservableData *data) {
             break;
         }
         case ACTION_LOAD: {
-            // Never swap projects while playing: tearing the current project down
-            // under the live (multicore) render corrupts the heap. Stop first
-            // (stock LGPT refuses outright while playing); retry once stopped.
+            // Can't load a song while playing -- like stock LGPT. (Tearing the
+            // project down under the live multicore render corrupts the heap.)
+            // Just tell the user; they stop, then load.
             if (player->IsRunning()) {
-                player->Stop();
+                MessageBox *mb = new MessageBox(*this, "Not while playing", MBBF_OK);
+                DoModal(mb);
                 break;
             }
             MessageBox *mb = new MessageBox(
