@@ -1,11 +1,36 @@
 #include "WavFileWriter.h"
 #include "System/Console/Trace.h"
+#include "Services/Time/TimeService.h"
+#include <stdlib.h>
+
+// Ring capacity per stem, in shorts (power of two). 1<<17 = 131072 shorts =
+// ~1.5 s of stereo audio = 256 KB. With 16 stems that's ~4 MB of RAM, and it
+// absorbs any realistic SD-card write stall without ever blocking the render.
+#define WAV_RING_SHORTS (1u << 17)
+
+// ---- background drain thread ------------------------------------------------
+
+bool WavWriterThread::Execute() {
+	while (!shouldTerminate()) {
+		writer_->drainToDisk() ;
+		TimeService::GetInstance()->Sleep(5) ; // poll ~every 5 ms
+	}
+	writer_->drainToDisk() ; // final flush of whatever is still queued
+	return false ;
+}
+
+// ---- writer -----------------------------------------------------------------
 
 WavFileWriter::WavFileWriter(const char *path):
+	sampleCount_(0),
 	file_(0),
-	buffer_(0),
-	bufferSize_(0),
-	sampleCount_(0)
+	ring_(0),
+	ringCapacity_(WAV_RING_SHORTS),
+	ringMask_(WAV_RING_SHORTS - 1),
+	writePos_(0),
+	readPos_(0),
+	dropped_(0),
+	thread_(0)
 {
 	Path filePath(path) ;
 	file_=FileSystem::GetInstance()->Open(filePath.GetPath().c_str(),"wb") ;
@@ -53,6 +78,13 @@ WavFileWriter::WavFileWriter(const char *path):
 
 		size=0 ;  // to be updated later
 		file_->Write(&chunk,1,4);
+
+		// allocate the ring and spin up the background drain thread
+		ring_=(short *)malloc(ringCapacity_*sizeof(short)) ;
+		if (ring_) {
+			thread_=new WavWriterThread(this) ;
+			thread_->Start() ;
+		}
 	} ;
 } ;
 
@@ -62,42 +94,77 @@ WavFileWriter::~WavFileWriter() {
 
 void WavFileWriter::AddBuffer(fixed *bufferIn,int size) {
 
-	if (!file_) return ;
+	if (!file_ || !ring_) return ;
 
-	// allocate a short buffer for transfer
+	unsigned int shorts=(unsigned int)(size*2) ; // stereo
+	unsigned int w=writePos_ ;
+	unsigned int r=readPos_ ;
+	unsigned int freeSlots=ringCapacity_-(w-r) ;
+	if (shorts>freeSlots) {
+		// Writer thread can't keep up: drop this chunk (a gap in the RECORDING)
+		// rather than block the realtime audio thread.
+		dropped_+=size ;
+		return ;
+	}
 
-	if (size>bufferSize_) {
-		SAFE_FREE(buffer_) ;
-		buffer_=(short *)malloc(size*2*sizeof(short)) ;
-		bufferSize_=size ;
-	} ;
-
-	if (!buffer_) return ;
-
-	short *s=buffer_ ;
 	fixed *p=bufferIn ;
-
-	fixed v;
 	fixed f_32767=i2fp(32767) ;
 	fixed f_m32768=i2fp(-32768) ;
-
-	for (int i=0;i<size*2;i++) {
-        // Left
-		v=*p++  ;
+	for (unsigned int i=0;i<shorts;i++) {
+		fixed v=*p++ ;
 		if (v>f_32767) {
 			v=f_32767 ;
 		} else if (v<f_m32768) {
 			v=f_m32768 ;
 		}
-		*s++=short(fp2i(v)) ;
-	} ;
-	file_->Write(buffer_,2,size*2) ;
-	sampleCount_+=size ;
-} ;
+		ring_[(w+i)&ringMask_]=short(fp2i(v)) ;
+	}
+	__sync_synchronize() ; // publish the data before advancing the write pointer
+	writePos_=w+shorts ;
+}
+
+void WavFileWriter::drainToDisk() {
+
+	if (!file_ || !ring_) return ;
+
+	unsigned int w=writePos_ ;
+	__sync_synchronize() ; // read the data only after seeing the write pointer
+	unsigned int r=readPos_ ;
+	unsigned int avail=w-r ;
+	if (avail==0) return ;
+
+	// write in up to two contiguous chunks (the ring may wrap)
+	unsigned int idx=r&ringMask_ ;
+	unsigned int firstChunk=ringCapacity_-idx ;
+	if (firstChunk>avail) firstChunk=avail ;
+	file_->Write(ring_+idx,sizeof(short),firstChunk) ;
+	if (avail>firstChunk) {
+		file_->Write(ring_,sizeof(short),avail-firstChunk) ;
+	}
+
+	sampleCount_+=avail/2 ; // shorts -> stereo frames
+	__sync_synchronize() ;
+	readPos_=r+avail ;
+}
 
 void WavFileWriter::Close() {
 
 	if (!file_) return ;
+
+	// stop the drain thread (it does a final flush on its way out)
+	if (thread_) {
+		thread_->RequestTermination() ;
+		while (!thread_->IsFinished()) {
+			TimeService::GetInstance()->Sleep(1) ;
+		}
+		delete thread_ ;
+		thread_=0 ;
+	}
+	drainToDisk() ; // safety: flush anything left, now single-threaded
+
+	if (dropped_>0) {
+		Trace::Error("WavFileWriter: dropped %d samples (disk too slow)",dropped_) ;
+	}
 
 	size_t len=file_->Tell() ;
 	len=Swap32(len-8) ;
@@ -105,13 +172,15 @@ void WavFileWriter::Close() {
 	file_->Write(&len,4,1) ;
 
 	file_->Seek(40,SEEK_SET) ;
-	sampleCount_=Swap32(sampleCount_*4) ;
-	file_->Write(&sampleCount_,4,1) ;
+	unsigned int dataSize=Swap32(sampleCount_*4) ;
+	file_->Write(&dataSize,4,1) ;
 
 	file_->Seek(0,SEEK_END) ;
 
 	file_->Close() ;
 	SAFE_DELETE(file_) ;
-	SAFE_FREE(buffer_) ;
-
+	if (ring_) {
+		free(ring_) ;
+		ring_=0 ;
+	}
 } ;
