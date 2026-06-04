@@ -81,6 +81,13 @@ void AudioDriver::AddBuffer(short *buffer,int samplecount) {
 // no runaway growth toward SOUND_BUFFER_COUNT ~= 2s) and REBUILDS the cushion
 // after a dip (so the pool can't get stuck near empty -> constant underruns).
 bool AudioDriver::needsBuffering() {
+  // Never produce while stopped. During a project switch the consumer is gone and
+  // AddBuffer() early-returns without advancing poolQueuePosition_, so fill never
+  // climbs -- the producer loop would spin and keep rendering into a project that
+  // is being torn down (heap corruption / crash). Wait for the next Start().
+  if (!isPlaying_) {
+    return false ;
+  }
   int fill = (poolQueuePosition_ - poolPlayPosition_ + SOUND_BUFFER_COUNT) % SOUND_BUFFER_COUNT ;
   int target = settings_.preBufferCount_ ;
   if (target < 2) target = 2 ;
