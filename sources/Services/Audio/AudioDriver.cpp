@@ -75,6 +75,19 @@ void AudioDriver::AddBuffer(short *buffer,int samplecount) {
 }
 
 void AudioDriver::OnNewBufferNeeded() {
+  // Cap the buffered depth so OUTPUT LATENCY stays bounded. The worker is woken
+  // once per consumed buffer (including underruns, so it can recover). Without a
+  // cap, every underrun leaves the producer (poolQueuePosition_) one ahead of
+  // the consumer (poolPlayPosition_) and the queue grows toward
+  // SOUND_BUFFER_COUNT buffers (~2s of latency). Only render while we're below
+  // the configured prebuffer depth; this keeps recovery AND a steady low latency.
+  int fill = (poolQueuePosition_ - poolPlayPosition_ + SOUND_BUFFER_COUNT) % SOUND_BUFFER_COUNT ;
+  int target = settings_.preBufferCount_ ;
+  if (target < 2) target = 2 ;
+  if (target > SOUND_BUFFER_COUNT - 1) target = SOUND_BUFFER_COUNT - 1 ;
+  if (fill >= target) {
+    return ; // already enough buffered: producing more would only add latency
+  }
   SetChanged() ;
   Event event(Event::ADET_BUFFERNEEDED);
   NotifyObservers(&event) ;
