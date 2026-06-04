@@ -56,6 +56,9 @@ public:
 	AudioSettings GetAudioSettings() ;
 
 	void OnNewBufferNeeded() ;
+	// True while the buffered depth is below the target prebuffer (producer
+	// should keep producing until this returns false).
+	bool needsBuffering() ;
 
 protected:
 	void eatBuffer(void *buffer,int size) ; // size in bytes

@@ -18,7 +18,15 @@ SDLAudioDriverThread::SDLAudioDriverThread(SDLAudioDriver *driver) {
 bool SDLAudioDriverThread::Execute() {
     while (!shouldTerminate()) {
         semaphore_->Wait();
-        driver_->OnNewBufferNeeded();
+        // Refill the pool up to the prebuffer target, then go back to waiting.
+        // Producing until the target (rather than one buffer per wakeup)
+        // rebuilds the cushion after any dip, so the pool never gets stuck near
+        // empty (which caused constant underruns/crackle); stopping AT the
+        // target bounds latency. The shouldTerminate() check keeps shutdown
+        // responsive even if the CPU can't reach the target (real overload).
+        while (driver_->needsBuffering() && !shouldTerminate()) {
+            driver_->OnNewBufferNeeded();
+        }
     };
     SysSemaphore *semaphore = semaphore_;
     semaphore_ = 0;

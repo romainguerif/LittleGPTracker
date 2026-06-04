@@ -74,37 +74,26 @@ void AudioDriver::AddBuffer(short *buffer,int samplecount) {
 	hasData_=true ;
 }
 
-void AudioDriver::OnNewBufferNeeded() {
-  // Keep the pool filled to a TARGET depth (the configured prebuffer), and no
-  // more. This bounds latency (no runaway growth toward SOUND_BUFFER_COUNT ~=
-  // 2s) AND, crucially, REBUILDS the cushion after any dip.
-  //
-  // We produce in a loop until fill reaches the target. Producing only one
-  // buffer per wakeup was the bug behind the constant light crackle: after a
-  // single slow render the consumer drains 1 and we add only 1, so the pool gets
-  // stuck near empty forever (1:1) and underruns on every callback. Looping
-  // rebuilds the cushion in one wakeup whenever the render can keep up.
+// True while the pool holds fewer than the target prebuffer depth. The producer
+// thread polls this to fill the pool up to the target after any dip and then
+// stop -- a classic bounded producer/consumer with the target as the high
+// watermark. This both BOUNDS latency (never more than the target buffered, so
+// no runaway growth toward SOUND_BUFFER_COUNT ~= 2s) and REBUILDS the cushion
+// after a dip (so the pool can't get stuck near empty -> constant underruns).
+bool AudioDriver::needsBuffering() {
+  int fill = (poolQueuePosition_ - poolPlayPosition_ + SOUND_BUFFER_COUNT) % SOUND_BUFFER_COUNT ;
   int target = settings_.preBufferCount_ ;
   if (target < 2) target = 2 ;
   if (target > SOUND_BUFFER_COUNT - 1) target = SOUND_BUFFER_COUNT - 1 ;
+  return fill < target ;
+}
 
-  // Rebuild GENTLY: produce at most a couple of buffers per wakeup. That is
-  // enough to refill a shallow dip immediately and to climb out of a deep one
-  // over a few callbacks (+1 net each), without bursting many renders at once --
-  // which, if the CPU can't actually keep up, would only make the underruns
-  // worse. A shallow dip (fill == target-1) just produces one and stops.
-  const int kMaxBurst = 2 ;
-  int produced = 0 ;
-  for (;;) {
-    int fill = (poolQueuePosition_ - poolPlayPosition_ + SOUND_BUFFER_COUNT) % SOUND_BUFFER_COUNT ;
-    if (fill >= target || produced >= kMaxBurst) {
-      break ;
-    }
-    produced++ ;
-    SetChanged() ;
-    Event event(Event::ADET_BUFFERNEEDED);
-    NotifyObservers(&event) ;
-  }
+void AudioDriver::OnNewBufferNeeded() {
+  // Produce exactly one buffer. The producer thread loops on needsBuffering()
+  // to decide HOW MANY to produce (fill to target), so this stays single-purpose.
+  SetChanged() ;
+  Event event(Event::ADET_BUFFERNEEDED);
+  NotifyObservers(&event) ;
 } ;
 
 void AudioDriver::onAudioBufferTick()
