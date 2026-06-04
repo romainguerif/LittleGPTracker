@@ -365,28 +365,43 @@ bool WavFile::GetBuffer(long start,long size) {
 	}
 
 	// ---- 24 / 32-bit int or 32-bit float -> down-convert to signed 16-bit ----
-	// (little-endian; all LGPT targets are LE). Read the raw data, then keep the
-	// top 16 bits (int) or scale from [-1,1] (float).
+	// (little-endian; all LGPT targets are LE). Read the raw data in SMALL chunks
+	// (like the 8/16-bit path), converting each chunk straight into samples_. This
+	// avoids ever allocating one huge readBuffer_ / doing one giant read for the
+	// whole file -- which fails on the device's pool allocator for long samples
+	// (the file then played only its start, then silence). readBuffer_ stays ~4KB.
 	long total=(long)size*channelCount_ ;     // 16-bit samples to produce
-	long rawSize=total*bytePerSample_ ;
-	readBlock(rawStart,rawSize) ;             // into readBuffer_
-	unsigned char *raw=(unsigned char *)readBuffer_ ;
+	int bps=bytePerSample_ ;                   // 3 (24-bit) or 4 (32-bit/float)
+	long chunkSamples=4096/bps ;               // whole samples per ~4KB raw chunk
+	if (chunkSamples<1) chunkSamples=1 ;
 	short *out=samples_ ;
-	if (isFloat_) {
-		for (long i=0;i<total;i++) {
-			float f ; memcpy(&f,raw+i*4,4) ;
-			int v=(int)(f*32767.0f) ;
-			if (v>32767) v=32767 ; else if (v<-32768) v=-32768 ;
-			out[i]=(short)v ;
+	long done=0 ;
+	long rawPos=rawStart ;
+	while (done<total) {
+		long n=total-done ;
+		if (n>chunkSamples) n=chunkSamples ;
+		long rawBytes=n*bps ;
+		readBlock(rawPos,rawBytes) ;          // into readBuffer_ (small, reused)
+		unsigned char *raw=(unsigned char *)readBuffer_ ;
+		if (!raw) break ;                     // alloc failed: leave the rest silent
+		if (isFloat_) {
+			for (long i=0;i<n;i++) {
+				float f ; memcpy(&f,raw+i*4,4) ;
+				int v=(int)(f*32767.0f) ;
+				if (v>32767) v=32767 ; else if (v<-32768) v=-32768 ;
+				out[done+i]=(short)v ;
+			}
+		} else if (bps==3) {
+			for (long i=0;i<n;i++) {
+				out[done+i]=(short)((raw[i*3+2]<<8)|raw[i*3+1]) ;
+			}
+		} else { // 32-bit signed int
+			for (long i=0;i<n;i++) {
+				out[done+i]=(short)((raw[i*4+3]<<8)|raw[i*4+2]) ;
+			}
 		}
-	} else if (bytePerSample_==3) {
-		for (long i=0;i<total;i++) {
-			out[i]=(short)((raw[i*3+2]<<8)|raw[i*3+1]) ;
-		}
-	} else { // 32-bit signed int
-		for (long i=0;i<total;i++) {
-			out[i]=(short)((raw[i*4+3]<<8)|raw[i*4+2]) ;
-		}
+		done+=n ;
+		rawPos+=rawBytes ;
 	}
 	return true ;
 } ;

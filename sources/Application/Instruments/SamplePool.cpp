@@ -141,6 +141,15 @@ bool SamplePool::loadSample(const char *path) {
 		strcpy(names_[count_],name.c_str()) ;
 		count_++ ;
 		wave->GetBuffer(0,wave->GetSize(-1)) ;
+		// diagnostic: confirm the whole sample made it into RAM (size + tail value)
+		{
+			int dsz=wave->GetSize(-1) ;
+			int dch=wave->GetChannelCount(-1) ;
+			short *dsb=(short *)wave->GetSampleBuffer(-1) ;
+			long dlast=(dsz>0)?(long)(dsz-1)*dch:0 ;
+			Trace::Log("loadSample","loaded size=%d ch=%d first=%d last=%d",
+				dsz,dch,dsb?dsb[0]:0,dsb?dsb[dlast]:0) ;
+		}
 		wave->Close() ;
 		return true ;
 	} else {
