@@ -735,6 +735,14 @@ void AppWindow::Update(Observable &o, I_ObservableData *d) {
     }
 
     case VET_QUIT_PROJECT: {
+        // Don't close the project while it's playing: the live (multicore) audio
+        // render would touch project data being freed during teardown (heap
+        // corruption). Stop first -- stock LGPT refuses this outright while
+        // playing. The user retries once stopped.
+        if (Player::GetInstance()->IsRunning()) {
+            Player::GetInstance()->Stop();
+            break;
+        }
         // defer event to after we got out of the view
         _closeProject = true;
         break;

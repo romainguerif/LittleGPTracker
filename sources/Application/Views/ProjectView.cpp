@@ -347,6 +347,13 @@ void ProjectView::Update(Observable &,I_ObservableData *data) {
             break;
         }
         case ACTION_LOAD: {
+            // Never swap projects while playing: tearing the current project down
+            // under the live (multicore) render corrupts the heap. Stop first
+            // (stock LGPT refuses outright while playing); retry once stopped.
+            if (player->IsRunning()) {
+                player->Stop();
+                break;
+            }
             MessageBox *mb = new MessageBox(
                 *this, "Load song and lose changes ?", MBBF_YES | MBBF_NO);
             DoModal(mb, LoadCallback);
