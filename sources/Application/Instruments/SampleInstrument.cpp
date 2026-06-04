@@ -417,9 +417,12 @@ bool SampleInstrument::Start(int channel,unsigned char midinote,bool cleanstart)
 	memset(eqZ_[channel],0,sizeof(eqZ_[channel])) ;
 	lfoPhase_[channel]=0.0f ;
 	compGain_[channel]=1.0f ;
-	// Trigger the amp envelope from silence so the attack ramp declicks the onset.
+	// Start the amp envelope's attack. We do NOT force the level to 0 here: a
+	// retrigger of a still-sounding voice must ramp from its current level (a
+	// jump to 0 would click at the seam). A genuine cold start already has
+	// level 0 (every voice-end path below resets it), so the attack still ramps
+	// up from silence and declicks the onset.
 	ampEnvPhase_[channel]=AMPENV_ATTACK ;
-	ampEnvLevel_[channel]=0.0f ;
 
   // Initialize feedback data
 
@@ -879,11 +882,15 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 
 			// look where we are, if we need to
 
-			if (!rpReverse) { //Looping forward 
+			if (!rpReverse) { //Looping forward
 				if (input>=lastSample/*-((loopMode==SILM_OSCFINE)?1:0)*/) {
 					switch(loopMode) {
                     case SILM_ONESHOT:
                         *rpFinished = true;
+                        // Voice ended: reset the envelope so the next note on this
+                        // channel cold-starts (level 0 -> attack declicks its onset).
+                        ampEnvPhase_[channel] = AMPENV_IDLE;
+                        ampEnvLevel_[channel] = 0.0f;
                         break;
                     case SILM_LOOP:
                     case SILM_OSC:
@@ -932,6 +939,8 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 					switch(loopMode) {
                     case SILM_ONESHOT:
                         *rpFinished = true;
+                        ampEnvPhase_[channel] = AMPENV_IDLE;
+                        ampEnvLevel_[channel] = 0.0f;
                         break;
                     case SILM_LOOP:
                     case SILM_OSC:
