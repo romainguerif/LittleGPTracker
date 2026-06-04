@@ -1,6 +1,8 @@
 #include "ImportSampleDialog.h"
 #include "Application/Instruments/SamplePool.h"
 #include "Application/Instruments/SampleInstrument.h"
+#include "Application/Mixer/MixerService.h"
+#include "Application/Player/Player.h"
 
 #define LIST_SIZE 15
 #define LIST_WIDTH 28
@@ -117,22 +119,47 @@ void ImportSampleDialog::OnFocus() {
 } ;
 
 void ImportSampleDialog::preview(Path &element) {
+	// (Re)starting the streamer reconfigures the buffer the audio thread reads;
+	// browsing fires this repeatedly, so guard it with the mixer lock.
+	MixerService *mixer=MixerService::GetInstance() ;
+	mixer->Lock() ;
 	Player::GetInstance()->StartStreaming(element) ;
+	mixer->Unlock() ;
 }
 
 void ImportSampleDialog::endPreview() {
+	MixerService *mixer=MixerService::GetInstance() ;
+	mixer->Lock() ;
 	Player::GetInstance()->StopStreaming() ;
+	mixer->Unlock() ;
 }
 
 void ImportSampleDialog::import(Path &element) {
 
+	MixerService *mixer=MixerService::GetInstance() ;
+
+	// Stop the preview streamer under the mixer lock: it renders on the audio
+	// thread, so tearing it down concurrently with a render races (intermittent
+	// crash while loading a sample).
+	mixer->Lock() ;
+	Player::GetInstance()->StopStreaming() ;
+	mixer->Unlock() ;
+
 	SamplePool *pool=SamplePool::GetInstance() ;
+	// The file copy / WAV load only touches a NEW pool slot the audio thread does
+	// not reference yet, so do it unlocked (it can be slow for big samples and we
+	// don't want to stall the audio for the whole copy).
 	int sampleID=pool->ImportSample(element) ;
 	if (sampleID>=0) {
 		I_Instrument *instr=viewData_->project_->GetInstrumentBank()->GetInstrument(toInstr_) ;
 		if (instr->GetType()==IT_SAMPLE) {
 			SampleInstrument *sinstr=(SampleInstrument *)instr ;
+			// Re-point the instrument at the new sample under the lock, so the
+			// audio thread can't be mid-render on this instrument while its
+			// sample source changes (use-after-free / out-of-bounds read).
+			mixer->Lock() ;
 			sinstr->AssignSample(sampleID) ;
+			mixer->Unlock() ;
 			toInstr_=viewData_->project_->GetInstrumentBank()->GetNext() ;
 		};
 	} else {
