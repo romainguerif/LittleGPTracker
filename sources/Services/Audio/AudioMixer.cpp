@@ -19,6 +19,21 @@ public:
 		done_=SysSemaphore::Create(0,1) ;
 	}
 	virtual bool Execute() {
+#if defined(__aarch64__)
+		// Flush denormals to zero on THIS thread too. FPCR is per-thread, and the
+		// audio thread sets it in AudioOutDriver::Trigger() -- but this helper
+		// renders the master's SECOND HALF of buses (channels 9-16 + the preview
+		// stream). Without the flush, decaying sample tails / EQ / feedback drift
+		// into denormals, which are ~100x slower on Cortex-A53. The worker then
+		// can't keep up, the audio thread stalls at the barrier, and exactly those
+		// worker-rendered voices "play their start then cut". Set FPCR.FZ once.
+		{
+			unsigned long fpcr ;
+			__asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr)) ;
+			fpcr |= (1UL<<24) ;
+			__asm__ __volatile__("msr fpcr, %0" :: "r"(fpcr)) ;
+		}
+#endif
 		while (!shouldTerminate()) {
 			go_->Wait() ;
 			if (shouldTerminate()) break ;
