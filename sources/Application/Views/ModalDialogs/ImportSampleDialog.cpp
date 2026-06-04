@@ -3,12 +3,14 @@
 #include "Application/Instruments/SampleInstrument.h"
 #include "Application/Mixer/MixerService.h"
 #include "Application/Player/Player.h"
+#include "Application/Model/Config.h"
 
 #define LIST_SIZE 15
 #define LIST_WIDTH 28
 
 bool ImportSampleDialog::initStatic_=false ;
 Path ImportSampleDialog::sampleLib_("") ;
+Path ImportSampleDialog::browseRoot_("") ;
 Path ImportSampleDialog::currentPath_("") ;
 
 static const char *buttonText[3]= {
@@ -22,6 +24,11 @@ ImportSampleDialog::ImportSampleDialog(View &view):ModalView(view) {
 		const char *slpath=SamplePool::GetInstance()->GetSampleLib() ;
 		sampleLib_=Path(slpath) ;
 		currentPath_=Path(slpath) ;
+		// You can navigate up as far as SAMPLEBROWSEROOT (e.g. the SD card root),
+		// so extra sample folders outside the sample lib are reachable. Defaults
+		// to the sample lib itself (= the old "locked to sample lib" behaviour).
+		const char *brpath=Config::GetInstance()->GetValue("SAMPLEBROWSEROOT") ;
+		browseRoot_=Path((brpath && brpath[0])?brpath:slpath) ;
 		initStatic_=true ;
 	}
 	selected_=0 ;
@@ -238,8 +245,14 @@ void ImportSampleDialog::ProcessButtonMask(unsigned short mask,bool pressed) {
 
 bool ImportSampleDialog::isSampleLibRoot()
 {
-    // return sampleLib_.GetPath().find(currentPath_.GetPath()) != std::string::npos; // Causes issues in Win, Miyoo
-	return currentPath_.GetPath()==sampleLib_.GetPath();
+    // "Can we still go up?" -- stop at the configured browse root (defaults to
+    // the sample lib, so behaviour is unchanged unless SAMPLEBROWSEROOT is set).
+    // Compare trailing-slash-insensitively (navigating up strips the slash).
+	std::string cur=currentPath_.GetPath() ;
+	std::string root=browseRoot_.GetPath() ;
+	while (cur.size()>1 && cur[cur.size()-1]=='/') cur.erase(cur.size()-1) ;
+	while (root.size()>1 && root[root.size()-1]=='/') root.erase(root.size()-1) ;
+	return cur==root ;
 };
 
 Path* ImportSampleDialog::getImportElement() {

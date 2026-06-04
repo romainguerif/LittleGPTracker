@@ -32,7 +32,8 @@ private:
 	int toInstr_ ;
 	int selected_ ;
 	static bool initStatic_ ;
-	static Path sampleLib_ ;
+	static Path sampleLib_ ;   // start folder (SAMPLELIB)
+	static Path browseRoot_ ;  // highest folder you can navigate up to (SAMPLEBROWSEROOT, defaults to sampleLib_)
 	static Path currentPath_ ;
 
 } ;
