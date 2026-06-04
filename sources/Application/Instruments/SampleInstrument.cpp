@@ -788,7 +788,7 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 		fixed *delaySendBuf=0 ;
 		fixed delaySendScale=0 ;
 		if (rp->delaySend_>0 && Delay::GetInstance()->active()) {
-			delaySendBuf=Delay::GetInstance()->sendBuffer() ;
+			delaySendBuf=Delay::GetInstance()->sendBuffer(channel) ;
 			delaySendScale=fl2fp(rp->delaySend_/255.0f) ;
 		}
 

@@ -8,6 +8,7 @@
 #include "Services/Midi/MidiService.h"
 #include "System/Console/Trace.h"
 #include <time.h>
+#include <string.h>
 
 MixerService::MixerService() : out_(0), ownsOut_(false), sync_(0), isRendering_(false) {
     mode_ = MSRM_PLAYBACK;
@@ -37,6 +38,13 @@ bool MixerService::Init() {
 	for (int i=0;i<MAX_BUS_COUNT;i++) {
 		master_.Insert(bus_[i]);
 	}
+
+	// Render the master's channel buses across CPU cores (the Brick has 4).
+	// Default on; set AUDIOMULTICORE=NO in config.xml to force single-core.
+	const char *mc = Config::GetInstance()->GetValue("AUDIOMULTICORE") ;
+	bool useMulticore = (!mc) || (strcmp(mc,"NO")!=0 && strcmp(mc,"no")!=0) ;
+	master_.SetParallel(useMulticore) ;
+	Trace::Log("MixerService", useMulticore ? "multicore render ON" : "multicore render OFF") ;
 
 	bool result = false;
 	if (out_) {

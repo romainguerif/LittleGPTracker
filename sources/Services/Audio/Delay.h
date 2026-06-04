@@ -18,8 +18,12 @@ public:
 	void Close() ;
 
 	bool active() ; // delay enabled?
-	fixed *sendBuffer() { return sendBuf_ ; } // voices accumulate sends here
-	void clearSend(int frames) ;              // clear the send accumulator
+	// Per-CHANNEL send accumulators: each voice writes (output*send) into ITS OWN
+	// channel's buffer, so the parallel per-channel render never has two threads
+	// writing the same memory. processSend() sums them. In single-thread mode this
+	// is just N separate buffers summed at the end -> bit-identical result.
+	fixed *sendBuffer(int channel) ;
+	void clearSend(int frames) ;              // clear all channels' accumulators
 	bool processSend(fixed *master, int frames) ; // add the delay wet to master
 
 	// Bus settings (persisted via the Project save/load bridge).
@@ -32,9 +36,11 @@ public:
 
 private:
 	fixed *ring_ ;
-	fixed *sendBuf_ ;
+	fixed *sendBuf_ ;   // SONG_CHANNEL_COUNT contiguous per-channel regions
+	fixed *sendMix_ ;   // scratch: the summed sends, built in processSend()
 	int ringFrames_ ;
 	int sendFrames_ ;
+	int sendStride_ ;   // per-channel region size in fixeds (sendFrames_*2)
 	int writePos_ ;
 	float lpL_, lpR_ ;
 } ;
