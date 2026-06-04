@@ -235,15 +235,23 @@ WavFile *WavFile::Open(const char *path) {
 	chunk = Swap32(chunk);
 	
 
-	while (chunk!=0x61746164) {
+	int dataGuard = 0 ;
+	while (chunk!=0x61746164 && dataGuard++ < 64) {
 		position+=wav->readBlock(position,4) ;
 		memcpy(&size,wav->readBuffer_,4) ;
 		size = Swap32(size);
 
 		position+=size ;
+		if (size & 1) position += 1 ; // word-align (pad byte on odd-size chunks)
 		position+=wav->readBlock(position,4) ;
 		memcpy(&chunk,wav->readBuffer_,4) ;
 		chunk = Swap32(chunk);
+	}
+
+	if (chunk!=0x61746164) { // never found 'data' -> truncated/malformed file
+		Trace::Error("Bad WAV: no data chunk") ;
+		delete wav ;
+		return 0 ;
 	}
 
         wav->sampleRate_=sampleRate ;
