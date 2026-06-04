@@ -23,6 +23,15 @@ fixed SampleInstrument::feedback_[SONG_CHANNEL_COUNT][FB_BUFFER_LENGTH*2] ;
 float SampleInstrument::compGain_[SONG_CHANNEL_COUNT] ;
 float SampleInstrument::eqZ_[SONG_CHANNEL_COUNT][2][3][2] ;
 float SampleInstrument::lfoPhase_[SONG_CHANNEL_COUNT] ;
+float SampleInstrument::ampEnvLevel_[SONG_CHANNEL_COUNT] ;
+int SampleInstrument::ampEnvPhase_[SONG_CHANNEL_COUNT] ;
+
+// Amp ADSR envelope phases
+#define AMPENV_IDLE    0
+#define AMPENV_ATTACK  1
+#define AMPENV_DECAY   2
+#define AMPENV_SUSTAIN 3
+#define AMPENV_RELEASE 4
 
 bool SampleInstrument::useDirtyDownsampling_ = false;
 
@@ -189,6 +198,18 @@ SampleInstrument::SampleInstrument() {
      // Per-instrument send into the global dub delay (0 = dry only)
      delaySend_ = new Variable("delay send", SIP_DELAY_SEND, 0x00);
      Insert(delaySend_);
+
+     // Amplitude ADSR envelope. Defaults reproduce the legacy "no envelope"
+     // sound (instant attack, full sustain, instant release) but the per-sample
+     // glide still gives a ~2ms ramp that declicks note on/off.
+     ampAttack_ = new Variable("amp attack", SIP_AMP_ATTACK, 0x00);
+     Insert(ampAttack_);
+     ampDecay_ = new Variable("amp decay", SIP_AMP_DECAY, 0x00);
+     Insert(ampDecay_);
+     ampSustain_ = new Variable("amp sustain", SIP_AMP_SUSTAIN, 0xFF);
+     Insert(ampSustain_);
+     ampRelease_ = new Variable("amp release", SIP_AMP_RELEASE, 0x00);
+     Insert(ampRelease_);
 
      for (int i = 0; i < SONG_CHANNEL_COUNT; i++) {
          compGain_[i] = 1.0f;
@@ -396,6 +417,9 @@ bool SampleInstrument::Start(int channel,unsigned char midinote,bool cleanstart)
 	memset(eqZ_[channel],0,sizeof(eqZ_[channel])) ;
 	lfoPhase_[channel]=0.0f ;
 	compGain_[channel]=1.0f ;
+	// Trigger the amp envelope from silence so the attack ramp declicks the onset.
+	ampEnvPhase_[channel]=AMPENV_ATTACK ;
+	ampEnvLevel_[channel]=0.0f ;
 
   // Initialize feedback data
 
@@ -465,6 +489,12 @@ void SampleInstrument::Stop(int channel) {
 
 	 renderParams *rp=renderParams_+channel ;
 	 running_=false ;
+	 // Enter the release phase: the voice keeps rendering and fades out over the
+	 // release time (declicks note-off) before finishing. PlayerChannel keeps the
+	 // instrument bound so this tail can play.
+	 if (ampEnvPhase_[channel]!=AMPENV_IDLE) {
+		 ampEnvPhase_[channel]=AMPENV_RELEASE ;
+	 }
 }
 
 void SampleInstrument::doTickUpdate(int channel) {
@@ -734,6 +764,18 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 			lfoPitchMax = depth * 0.06f ;                // +/- ~6% pitch (~1 semitone)
 		}
 
+		// Amp ADSR envelope coefficients (per K-rate step). Times map
+		// exponentially from one K-rate period (~2.3 ms, the declick floor) up to
+		// ~4 s. The increments are how much the 0..1 level moves each K-rate tick.
+		float ampKrateMs = 1000.0f * KRATE_SAMPLE_COUNT / 44100.0f ; // ~2.268 ms
+		float ampAtkMs = ampKrateMs * powf(4000.0f/ampKrateMs, ampAttack_->GetInt()/255.0f) ;
+		float ampDecMs = ampKrateMs * powf(4000.0f/ampKrateMs, ampDecay_->GetInt()/255.0f) ;
+		float ampRelMs = ampKrateMs * powf(4000.0f/ampKrateMs, ampRelease_->GetInt()/255.0f) ;
+		float ampAtkInc = ampKrateMs/ampAtkMs ; // level rise per K-rate tick
+		float ampDecInc = ampKrateMs/ampDecMs ; // level fall per K-rate tick
+		float ampRelInc = ampKrateMs/ampRelMs ;
+		float ampSus = ampSustain_->GetInt()/255.0f ; // sustain level 0..1
+
 		int count=size ; // number of samples to treat
 
 		fixed *result=buffer ;
@@ -751,6 +793,12 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 
 		fixed volscale=fl2fp(0.003921568627450980392156862745098f) ;
 		fixed volfactor=fp_mul(rp->volume_,volscale) ;
+
+		// Envelope-scaled volume actually applied per sample. It glides toward the
+		// K-rate target (volfactor * envLevel) so even a 0 attack/release yields a
+		// smooth ~2 ms ramp instead of a click. envVfInc is the per-sample step.
+		fixed envVolfactor=fp_mul(volfactor,fl2fp(ampEnvLevel_[channel])) ;
+		fixed envVfInc=0 ;
 
 		// Filter attenuate
 		fixed fpattenuate=fp_mul(rp->attenuate_,volscale) ;
@@ -1006,6 +1054,36 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 							break ;
 						}
 					}
+
+					// --- Amp ADSR envelope (K-rate phase advance) ---
+					// volfactor here is the env-free volume (base+updaters+LFO).
+					// Advance the level for the current phase, then re-aim the
+					// per-sample glide (envVolfactor) at the new target so the
+					// applied gain moves smoothly (no zipper/click).
+					switch (ampEnvPhase_[channel]) {
+					case AMPENV_ATTACK:
+						ampEnvLevel_[channel] += ampAtkInc ;
+						if (ampEnvLevel_[channel] >= 1.0f) { ampEnvLevel_[channel]=1.0f ; ampEnvPhase_[channel]=AMPENV_DECAY ; }
+						break ;
+					case AMPENV_DECAY:
+						ampEnvLevel_[channel] -= ampDecInc ;
+						if (ampEnvLevel_[channel] <= ampSus) { ampEnvLevel_[channel]=ampSus ; ampEnvPhase_[channel]=AMPENV_SUSTAIN ; }
+						break ;
+					case AMPENV_SUSTAIN:
+						ampEnvLevel_[channel]=ampSus ;
+						break ;
+					case AMPENV_RELEASE:
+						ampEnvLevel_[channel] -= ampRelInc ;
+						if (ampEnvLevel_[channel] <= 0.0f) { ampEnvLevel_[channel]=0.0f ; ampEnvPhase_[channel]=AMPENV_IDLE ; *rpFinished=true ; }
+						break ;
+					default: // idle
+						ampEnvLevel_[channel]=0.0f ;
+						break ;
+					}
+					{
+						fixed envTarget=fp_mul(volfactor,fl2fp(ampEnvLevel_[channel])) ;
+						envVfInc=(envTarget-envVolfactor)/KRATE_SAMPLE_COUNT ;
+					}
 			  }
 
 		    // get input sample to interpolate from
@@ -1105,9 +1183,10 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 
 					s2=(s2&mask);
 
-				// apply volume
-
-          s2=fp_mul(s2,volfactor) ;
+				// apply volume (envelope-scaled; envVolfactor glides per sample
+				// toward the K-rate target set above, which declicks note on/off)
+          s2=fp_mul(s2,envVolfactor) ;
+          envVolfactor+=envVfInc ;
 
 				// apply filtering if needed
 

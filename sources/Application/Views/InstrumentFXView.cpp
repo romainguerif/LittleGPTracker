@@ -146,6 +146,31 @@ void InstrumentFXView::fillFields() {
 	v = instrument->FindVariable(SIP_DELAY_SEND) ;
 	f = new UIIntVarField(position, *v, "delay send: %2.2X", 0, 255, 1, 0x10) ;
 	T_SimpleList<UIField>::Insert(f) ;
+
+	// --- AMPLITUDE ENVELOPE (ADSR), right column ---
+	// Shapes the voice volume over time and declicks note on/off. Defaults
+	// (attack 00 / decay 00 / sustain FF / release 00) keep the legacy sound.
+	position = GetAnchor() ;
+	position._x += 21 ;
+	position._y += 1 ; // leave a row for the ENVELOPE header
+	v = instrument->FindVariable(SIP_AMP_ATTACK) ;
+	f = new UIIntVarField(position, *v, "attack: %2.2X", 0, 255, 1, 0x10) ;
+	T_SimpleList<UIField>::Insert(f) ;
+
+	position._y += 1 ;
+	v = instrument->FindVariable(SIP_AMP_DECAY) ;
+	f = new UIIntVarField(position, *v, "decay:  %2.2X", 0, 255, 1, 0x10) ;
+	T_SimpleList<UIField>::Insert(f) ;
+
+	position._y += 1 ;
+	v = instrument->FindVariable(SIP_AMP_SUSTAIN) ;
+	f = new UIIntVarField(position, *v, "sustn:  %2.2X", 0, 255, 1, 0x10) ;
+	T_SimpleList<UIField>::Insert(f) ;
+
+	position._y += 1 ;
+	v = instrument->FindVariable(SIP_AMP_RELEASE) ;
+	f = new UIIntVarField(position, *v, "releas: %2.2X", 0, 255, 1, 0x10) ;
+	T_SimpleList<UIField>::Insert(f) ;
 }
 
 void InstrumentFXView::DrawView() {
@@ -171,6 +196,9 @@ void InstrumentFXView::DrawView() {
 	GUIPoint lfoHdr = a ;
 	lfoHdr._y += 14 ;
 	DrawString(lfoHdr._x, lfoHdr._y, "LFO (hypnotic mod)", props) ;
+	GUIPoint envHdr = a ;
+	envHdr._x += 21 ;
+	DrawString(envHdr._x, envHdr._y, "AMP ENV (adsr)", props) ;
 	SetColor(CD_NORMAL) ;
 
 	FieldView::Redraw() ;

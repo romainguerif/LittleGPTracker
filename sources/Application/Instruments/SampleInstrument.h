@@ -66,6 +66,11 @@ enum SampleInstrumentLoopMode {
 #define SIP_LFO_TARGET MAKE_FOURCC('L','F','T','G')
 #define SIP_LFO_RATE   MAKE_FOURCC('L','F','R','T')
 #define SIP_LFO_DEPTH  MAKE_FOURCC('L','F','D','P')
+// Per-instrument amplitude ADSR envelope (declicks note on/off + shapes volume)
+#define SIP_AMP_ATTACK  MAKE_FOURCC('A','A','T','K')
+#define SIP_AMP_DECAY   MAKE_FOURCC('A','D','E','C')
+#define SIP_AMP_SUSTAIN MAKE_FOURCC('A','S','U','S')
+#define SIP_AMP_RELEASE MAKE_FOURCC('A','R','E','L')
 
 #define SIP_DELAY_SEND MAKE_FOURCC('D','S','N','D')
 
@@ -132,6 +137,8 @@ private:
 	   // EQ biquad state: [channel][L/R][band 0..2][z1,z2]
 	   static float eqZ_[SONG_CHANNEL_COUNT][2][3][2] ;
 	   static float lfoPhase_[SONG_CHANNEL_COUNT] ; // LFO phase 0..1 per channel
+	   static float ampEnvLevel_[SONG_CHANNEL_COUNT] ; // amp ADSR level 0..1 per channel
+	   static int ampEnvPhase_[SONG_CHANNEL_COUNT] ;   // amp ADSR phase per channel (see AMPENV_*)
 
 	   Variable *volume_ ;
 	   Variable *crush_ ;
@@ -175,6 +182,11 @@ private:
        Variable *lfoTarget_;
        Variable *lfoRate_;
        Variable *lfoDepth_;
+       // Per-instrument amplitude ADSR envelope
+       Variable *ampAttack_;
+       Variable *ampDecay_;
+       Variable *ampSustain_;
+       Variable *ampRelease_;
        // Per-instrument delay send level
        Variable *delaySend_;
 

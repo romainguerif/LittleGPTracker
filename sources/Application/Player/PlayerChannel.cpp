@@ -30,7 +30,10 @@ void PlayerChannel::StopInstrument() {
      if (instr_) {
        instr_->Stop(index_) ;
      }
-     instr_=0 ;
+     // Keep instr_ bound so the amp-envelope RELEASE tail can still render: the
+     // channel goes silent on its own once Render() returns false (release done),
+     // exactly like a one-shot that plays to its end (which already leaves instr_
+     // set). A new note on this channel re-Start()s and overrides the tail.
 } ;
 
 bool PlayerChannel::Render(fixed *buffer,int samplecount) {
