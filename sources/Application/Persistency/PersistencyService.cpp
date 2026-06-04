@@ -3,6 +3,8 @@
 #include "Externals/Compression/lz.h"
 #include "System/Console/Trace.h"
 #include "Foundation/Types/Types.h"
+#include <stdio.h>   // remove() / rename() for the atomic save-replace
+#include <string>
 
 PersistencyService::PersistencyService():Service(MAKE_FOURCC('S','V','P','S')) {
 } ;
@@ -10,21 +12,34 @@ PersistencyService::PersistencyService():Service(MAKE_FOURCC('S','V','P','S')) {
 void PersistencyService::Save(const char *name) {
 
     Path filename(name);
+    std::string finalPath = filename.GetPath() ;
+    std::string tmpPath   = finalPath + ".tmp" ;
 
-    TiXmlDocument doc(filename.GetPath());
+    // IMPORTANT: write to a brand-new temp file, then rename it over the target.
+    // fopen("w") does NOT reliably truncate on the device's SD-card filesystem,
+    // so saving shorter content over a longer previous file left the old file's
+    // tail bytes appended after the new document ("junk after document element").
+    // That corrupt XML then crashed the NEXT project load (black screen on
+    // launch). Writing a fresh temp + renaming sidesteps truncation entirely and
+    // is crash-safe: the real file is only swapped in once fully written.
+    TiXmlDocument doc(tmpPath);
     TiXmlElement first("LITTLEGPTRACKER") ;
 	TiXmlNode *node=doc.InsertEndChild(first) ;
 
 	// Loop on all registered service
 	// accumulating XML flow
-	
+
 	IteratorPtr<SubService> it(GetIterator()) ;
 	for (it->Begin();!it->IsDone();it->Next()) {
 		Persistent *currentItem=(Persistent *)&it->CurrentItem() ;
 		currentItem->Save(node) ;
 	} ;
 
-	doc.SaveFile() ;
+	::remove(tmpPath.c_str()) ;            // make sure the temp is brand-new
+	if (doc.SaveFile()) {                  // write the fresh, clean document
+		::remove(finalPath.c_str()) ;      // drop the old (non-truncatable) file
+		::rename(tmpPath.c_str(), finalPath.c_str()) ; // atomically swap it in
+	}
 };
 
 bool PersistencyService::Load() {

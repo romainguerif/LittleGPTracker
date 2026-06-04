@@ -1,7 +1,8 @@
 #include "FileSystem.h"
-#include "Application/Utils/wildcard.h"	
+#include "Application/Utils/wildcard.h"
 #include "System/Console/Trace.h"
 #include <algorithm>
+#include <stdio.h>   // remove() — clear a stale destination before copy
 
 T_SimpleList<Path::Alias> Path::aliases_(true) ;
 
@@ -188,6 +189,10 @@ int FileSystemService::Copy(const Path &src,const Path &dst)
 
   FileSystem * fs=FileSystem::GetInstance() ;
   I_File     * isrc=fs->Open(src.GetPath().c_str(),"r");
+  // Remove the destination first: fopen("w") does not reliably truncate on the
+  // device's SD-card filesystem, so copying a shorter file over a longer one left
+  // stale tail bytes (this is what corrupted lgptsav.dat -> crash on next load).
+  ::remove(dst.GetPath().c_str()) ;
   I_File     * idst=fs->Open(dst.GetPath().c_str(),"w");
 
   Trace::Log("FS","FileSystemService::Copy %s to %s",
