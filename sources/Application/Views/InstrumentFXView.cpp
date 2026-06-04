@@ -151,7 +151,7 @@ void InstrumentFXView::fillFields() {
 	// Shapes the voice volume over time and declicks note on/off. Defaults
 	// (attack 00 / decay 00 / sustain FF / release 00) keep the legacy sound.
 	position = GetAnchor() ;
-	position._x += 21 ;
+	position._x += 14 ;
 	position._y += 1 ; // leave a row for the ENVELOPE header
 	v = instrument->FindVariable(SIP_AMP_ATTACK) ;
 	f = new UIIntVarField(position, *v, "attack: %2.2X", 0, 255, 1, 0x10) ;
@@ -197,8 +197,8 @@ void InstrumentFXView::DrawView() {
 	lfoHdr._y += 14 ;
 	DrawString(lfoHdr._x, lfoHdr._y, "LFO (hypnotic mod)", props) ;
 	GUIPoint envHdr = a ;
-	envHdr._x += 21 ;
-	DrawString(envHdr._x, envHdr._y, "AMP ENV (adsr)", props) ;
+	envHdr._x += 14 ;
+	DrawString(envHdr._x, envHdr._y, "AMP ADSR", props) ;
 	SetColor(CD_NORMAL) ;
 
 	FieldView::Redraw() ;

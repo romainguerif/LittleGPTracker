@@ -79,6 +79,11 @@ void PlayerChannel::Reset() {
 		mixBus_->Remove(*this) ;
 		mixBus_=0 ;
 	}
+	// Drop the instrument reference. StopInstrument() now keeps instr_ bound so an
+	// amp-envelope release tail can finish rendering, but on a full reset (project
+	// close/load) the project's instruments are about to be freed -- clearing it
+	// here avoids a dangling pointer (use-after-free / crash) on the next project.
+	instr_=0 ;
 	muted_=false ;
 	busIndex_=-1 ;
 } ;
