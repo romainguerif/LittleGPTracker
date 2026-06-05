@@ -52,6 +52,8 @@ WavFile::WavFile(I_File *file) {
 	bytePerSample_=2 ;
 	isFloat_=false ;
 	filePos_=-1 ;
+	loadedFrames_=0 ;
+	streaming_=false ;
 	file_=file ;
 } ;
 
@@ -417,6 +419,80 @@ bool WavFile::GetBuffer(long start,long size) {
 	}
 	return true ;
 } ;
+
+// ---- background "stream-in" loading -----------------------------------------
+// Allocate the full 16-bit sample buffer up front (so playback can index into it
+// as it fills), reset the watermark to 0. Header is already parsed by Open().
+bool WavFile::PrepareStreamLoad() {
+	long frames=size_ ;
+	if (frames<=0) return false ;
+	int needed=2*channelCount_*(int)frames ; // 16-bit output bytes
+	if (needed>sampleBufferSize_) {
+		SAFE_FREE(samples_) ;
+		samples_=(short *)SYS_MALLOC(needed) ;
+		sampleBufferSize_=needed ;
+	}
+	if (!samples_) { sampleBufferSize_=0 ; return false ; }
+	SetLoadedFrames(0) ;
+	streaming_=true ; // playback gate (IsReady) is active until the fill completes
+	return true ;
+}
+
+// Ready unless a background stream-in is still in progress. Synchronous loads
+// (streaming_ stays false) are ALWAYS ready -> existing behaviour unchanged.
+bool WavFile::IsReady() {
+	if (!streaming_) return true ;
+	return GetLoadedFrames()>=(long)size_ ;
+}
+
+// Decode frames [frameStart, frameStart+frameCount) from the file into samples_
+// at the matching offset, down-converting to 16-bit. Per-chunk for ALL formats
+// (the synchronous GetBuffer's 8/16-bit path expands in place at the end, which
+// can't be watermarked mid-fill -- this path converts each chunk straight into
+// place so the loader can publish progress after every chunk). Does NOT touch the
+// watermark; the caller advances it via SetLoadedFrames() once a chunk is in.
+bool WavFile::DecodeRange(long frameStart,long frameCount) {
+	if (!samples_ || !file_ || frameCount<=0) return false ;
+	int bps=bytePerSample_ ;
+	long outBase=frameStart*channelCount_ ;          // 16-bit sample index
+	long totalSamples=frameCount*channelCount_ ;     // 16-bit samples to produce
+	long rawPos=(long)dataPosition_+frameStart*(long)channelCount_*bps ;
+	long maxPerChunk=65536/bps ; if (maxPerChunk<1) maxPerChunk=1 ;
+	long done=0 ;
+	while (done<totalSamples) {
+		long n=totalSamples-done ; if (n>maxPerChunk) n=maxPerChunk ;
+		long rawBytes=n*bps ;
+		readBlock(rawPos,rawBytes) ;
+		unsigned char *raw=(unsigned char *)readBuffer_ ;
+		if (!raw) return false ;
+		short *out=samples_+outBase+done ;
+		if (bps==2 && !isFloat_) {            // 16-bit LE: raw IS the sample data
+			short *s16=(short *)raw ;
+			for (long i=0;i<n;i++) out[i]=Swap16(s16[i]) ;
+		} else if (bps==1 && !isFloat_) {     // 8-bit unsigned -> signed 16-bit
+			for (long i=0;i<n;i++) out[i]=(short)((raw[i]-128)*256) ;
+		} else if (isFloat_) {                // 32-bit float -> 16-bit
+			for (long i=0;i<n;i++) {
+				float f ; memcpy(&f,raw+i*4,4) ;
+				int v=(int)(f*32767.0f) ;
+				if (v>32767) v=32767 ; else if (v<-32768) v=-32768 ;
+				out[i]=(short)v ;
+			}
+		} else if (bps==3) {                  // 24-bit int -> top 16 bits
+			for (long i=0;i<n;i++) out[i]=(short)((raw[i*3+2]<<8)|raw[i*3+1]) ;
+		} else {                              // 32-bit int -> top 16 bits
+			for (long i=0;i<n;i++) out[i]=(short)((raw[i*4+3]<<8)|raw[i*4+2]) ;
+		}
+		done+=n ; rawPos+=rawBytes ;
+	}
+	return true ;
+}
+
+// Watermark accessors with a full fence each, so the producer's sample writes are
+// visible to the consumer once it observes the advanced watermark (A53 = weak
+// memory; same release/acquire discipline as the stem-writer SPSC ring).
+long WavFile::GetLoadedFrames() { long n=loadedFrames_ ; __sync_synchronize() ; return n ; }
+void WavFile::SetLoadedFrames(long n) { __sync_synchronize() ; loadedFrames_=n ; }
 
 void WavFile::Close() {
 	file_->Close() ;

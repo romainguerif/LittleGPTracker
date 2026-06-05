@@ -4,6 +4,7 @@
 
 #include "Foundation/T_Singleton.h"
 #include "WavFile.h"
+#include "SampleLoader.h"
 #include "Application/Model/Song.h"
 #include "Foundation/Observable.h"
 
@@ -43,6 +44,7 @@ protected:
   int count_;
   char *names_[MAX_PIG_SAMPLES];
   SoundSource *wav_[MAX_PIG_SAMPLES];
+  SampleLoader loader_; // background SD->RAM filler (no UI freeze on big samples)
 };
 
 #endif

@@ -20,6 +20,19 @@ public:
 	bool GetBuffer(long start,long sampleCount) ; // values in smples
 	void Close() ;
 	virtual bool IsMulti() {return false ; } ;
+	virtual bool IsReady() ; // false while a background stream-in is still filling
+
+	// ---- background "stream-in" loading -------------------------------------
+	// Same end result as GetBuffer(0,GetSize()) -- the whole sample ends up in
+	// samples_ -- but filled INCREMENTALLY so a big file does not freeze the UI.
+	// A background loader calls PrepareStreamLoad() once, then DecodeRange() in
+	// chunks; after each chunk it publishes the watermark via SetLoadedFrames().
+	// Playback reads up to GetLoadedFrames() and treats the rest as not-yet-there.
+	// The existing synchronous GetBuffer() path is untouched.
+	bool PrepareStreamLoad() ;                 // alloc samples_ full size, loadedFrames_=0
+	bool DecodeRange(long frameStart,long frameCount) ; // decode [start,+count) into samples_
+	long GetLoadedFrames() ;                   // acquire-load of the watermark
+	void SetLoadedFrames(long n) ;             // release-store of the watermark
 
 protected:
 	long readBlock(long position,long count) ;
@@ -36,6 +49,8 @@ private:
 	bool isFloat_ ; // true if the data is 32-bit IEEE float (else signed int)
 	int dataPosition_ ; // offset in file to get to data
 	long filePos_ ; // current file read position, to skip redundant seeks
+	volatile long loadedFrames_ ; // stream-in watermark: frames decoded & visible to playback
+	bool streaming_ ; // true if this file is being filled by the background loader
 
 	static int bufferChunkSize_ ;
 	static bool initChunkSize_ ;

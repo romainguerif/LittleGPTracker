@@ -285,6 +285,13 @@ bool SampleInstrument::Start(int channel,unsigned char midinote,bool cleanstart)
 	 if (rp->sampleBuffer_==0) {
 		 return false ;
 	 } ;
+	 // A sample still streaming in from the SD card isn't fully in RAM yet; don't
+	 // trigger the voice on a half-filled buffer (it would read uninitialised data).
+	 // Synchronous samples are always ready, so this never affects them. Once the
+	 // background load finishes the next trigger plays it normally (all features).
+	 if (!source_->IsReady()) {
+		 return false ;
+	 } ;
 	 rp->channelCount_=source_->GetChannelCount(rp->midiNote_) ;
 
 	 int rootNote=(rootNote_->GetInt()-60)+source_->GetRootNote(rp->midiNote_) ;

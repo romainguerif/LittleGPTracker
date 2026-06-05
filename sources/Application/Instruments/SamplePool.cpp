@@ -18,9 +18,11 @@ SamplePool::SamplePool() {
 		wav_[i]=NULL ;
 	} ;
 	count_=0 ;
+	loader_.StartLoader() ;
 } ;
 
 SamplePool::~SamplePool() {
+	loader_.StopLoader() ; // join the loader BEFORE freeing any WavFile (anti-UAF)
 	for (int i=0;i<MAX_PIG_SAMPLES;i++) {
 		SAFE_DELETE(wav_[i]) ;
 		SAFE_FREE(names_[i]) ;
@@ -34,6 +36,7 @@ const char *SamplePool::GetSampleLib() {
 } 
 
 void SamplePool::Reset() {
+	loader_.WaitIdle() ; // ensure no WavFile is mid-load before we free them all
 	count_=0 ;
 	for (int i=0;i<MAX_PIG_SAMPLES;i++) {
 		SAFE_DELETE(wav_[i]) ;
@@ -138,21 +141,23 @@ bool SamplePool::loadSample(const char *path) {
 		Trace::Error("Failed to load samples %s",wavPath.GetName().c_str()) ;
 		return false ;
 	}
-	// Pull the whole sample into RAM. If that fails (out of memory -- a long
-	// sample on a 1GB device), reject it cleanly rather than leaving a dead slot
-	// in the pool that would later play a null/garbage buffer. Load BEFORE
-	// publishing the slot so there is nothing to roll back on failure.
-	if (!wave->GetBuffer(0,wave->GetSize(-1))) {
+	// Allocate the full 16-bit buffer up front (cheap). If THAT fails (genuinely
+	// out of memory) reject cleanly. The actual SD read is handed to the background
+	// loader so a big sample never freezes the UI; playback gates on IsReady() and
+	// stays silent for the ~second it takes to stream in, then plays normally with
+	// every feature (loop/reverse/FX). The file handle stays open for the loader,
+	// which Close()s it when the fill completes.
+	if (!wave->PrepareStreamLoad()) {
 		Status::Set("Sample too big: %s",wavPath.GetName().c_str()) ;
 		delete wave ;
 		return false ;
 	}
-	wave->Close() ;
 	wav_[count_]=wave ;
 	const std::string name=wavPath.GetName() ;
 	names_[count_]=(char*)SYS_MALLOC(name.length()+1) ;
 	strcpy(names_[count_],name.c_str()) ;
 	count_++ ;
+	loader_.Enqueue(wave) ; // background SD->RAM fill (no UI freeze)
 	return true ;
 }
 
@@ -263,6 +268,7 @@ void SamplePool::PurgeSample(int i) {
 	std::string wavPath="samples:" ;
 	wavPath+=names_[i] ;
 	Path path(wavPath.c_str()) ;
+	loader_.WaitIdle() ; // don't free a WavFile the loader might still be filling
 	//delete wav
 	SAFE_DELETE(wav_[i]) ;
 	// delete name entry (allocated with SYS_MALLOC -> must use SAFE_FREE, not
