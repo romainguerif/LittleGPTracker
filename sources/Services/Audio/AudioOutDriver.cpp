@@ -87,6 +87,13 @@ void AudioOutDriver::Update(Observable &o,I_ObservableData *d)
 
 void AudioOutDriver::prepareMixBuffers() {
     sampleCount_ = getPlaySampleCount();
+    // Safety net on the audio thread: the fixed mix buffers hold MIX_BUFFER_SIZE/4
+    // stereo frames. sampleCount_ is derived from the tempo, so a tiny/zero tempo
+    // (corrupt project, pathological tap) would otherwise make us render past the
+    // end of primarySoundBuffer_/mixBuffer_ -> heap corruption + crash. Clamp it.
+    const int maxFrames = MIX_BUFFER_SIZE / 4 ;
+    if (sampleCount_ > maxFrames) sampleCount_ = maxFrames ;
+    if (sampleCount_ < 0) sampleCount_ = 0 ;
 } ;
 
 void AudioOutDriver::SetMasterVolume(int volume) {

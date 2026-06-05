@@ -51,6 +51,7 @@ WavFile::WavFile(I_File *file) {
 	sampleBufferSize_=0 ;
 	bytePerSample_=2 ;
 	isFloat_=false ;
+	filePos_=-1 ;
 	file_=file ;
 } ;
 
@@ -295,11 +296,16 @@ long WavFile::readBlock(long start,long size) {
   if (!readBuffer_)
   {
     Trace::Error("Failed to allocate read buffer of size %d",size);
-  } 
-  else 
+  }
+  else
   {
-  	file_->Seek(start,SEEK_SET) ;
+    // Only seek when we're not already at the right spot. Sample data is read in
+    // sequential chunks, so skipping the redundant seek lets stdio read-ahead do
+    // its job -- a real win on a slow SD card (the old code seeked before every
+    // ~4KB read, defeating buffering).
+    if (start!=filePos_) file_->Seek(start,SEEK_SET) ;
     file_->Read(readBuffer_,size,1) ;
+    filePos_=start+size ;
   }
 	return size ;
 } ;
@@ -319,7 +325,12 @@ bool WavFile::GetBuffer(long start,long size) {
 
   if (!samples_)
   {
+    // Out of memory (e.g. a very long sample on a 1GB device): fail cleanly so the
+    // caller can reject the sample, instead of dereferencing a null buffer below
+    // (crash) or playing garbage. sampleBufferSize_ was reset; clear it.
     Trace::Error("Failed to allocate %d samples",sampleBufferSize);
+    sampleBufferSize_=0 ;
+    return false ;
   }
 
 	int rawStart=dataPosition_+start*channelCount_*bytePerSample_ ;
@@ -343,7 +354,8 @@ bool WavFile::GetBuffer(long start,long size) {
 			bufferStart+=readSize ;
 			count-=readSize ;
 			offset+=readSize ;
-			if (bufferChunkSize_>0) TimeService::GetInstance()->Sleep(1) ;
+			// (No per-chunk Sleep: it throttled loading 10-100x when
+			// SAMPLELOADCHUNKSIZE was set, for no benefit on this target.)
 		}
 
 		// expand 8 bit data if needed

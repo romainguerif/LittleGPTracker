@@ -62,6 +62,10 @@ class SysProcessFactory: public T_Factory<SysProcessFactory> {
 public:
 	virtual bool BeginThread(SysThread &)=0 ;
 	virtual SysSemaphore *CreateNewSemaphore(int initialcount = 0, int maxcount = 0)=0 ;
+	// Join a thread started with BeginThread() at teardown. Default waits on the
+	// finished flag; SDL backs it with a real OS join (SDL_WaitThread) so the OS
+	// thread handle is released instead of leaked, with no busy-wait/-O3 hang.
+	virtual void JoinThread(SysThread &) ;
 
 } ;
 

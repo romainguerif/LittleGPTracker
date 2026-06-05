@@ -21,6 +21,10 @@ void SyncMaster::Stop() {
 } ;
 
 void SyncMaster::SetTempo(int tempo) {
+	// Guard against div-by-zero / absurd per-block frame counts from a corrupt
+	// project or a pathological tap: playSampleCount_ = k/tempo, so a tiny tempo
+	// blows it up. (The render thread also caps the frame count, belt-and-braces.)
+	if (tempo<10) tempo=10 ;
 	tempo_=tempo ;
 	int driverRate=Audio::GetInstance()->GetSampleRate() ;
     playSampleCount_=60.0f*driverRate*2.0f/tempo_/8.0f/float(AUDIO_SLICES_PER_STEP)  ;

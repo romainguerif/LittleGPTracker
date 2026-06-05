@@ -33,6 +33,14 @@ void SysThread::RequestTermination() {
 }
 
 
+// Default join for platforms without a real OS join: spin until the thread flags
+// completion. The memory barrier forces the flag to be re-read each iteration
+// (otherwise -O3 could hoist the load out of the loop and hang). SDL overrides
+// this with a proper SDL_WaitThread (no spin).
+void SysProcessFactory::JoinThread(SysThread &t) {
+	while (!t.IsFinished()) { __sync_synchronize() ; }
+}
+
 SysSemaphore *SysSemaphore::Create(int initialcount,int maxcount) {
 	return SysProcessFactory::GetInstance()->CreateNewSemaphore(initialcount,maxcount) ;
 } ;

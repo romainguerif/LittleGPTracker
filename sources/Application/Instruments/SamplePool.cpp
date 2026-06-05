@@ -134,31 +134,31 @@ bool SamplePool::loadSample(const char *path) {
 
     Path wavPath(path);
     WavFile *wave=WavFile::Open(path) ;
-	if (wave) {
-		wav_[count_]=wave ;
-		const std::string name=wavPath.GetName() ;
-		names_[count_]=(char*)SYS_MALLOC(name.length()+1) ;
-		strcpy(names_[count_],name.c_str()) ;
-		count_++ ;
-		wave->GetBuffer(0,wave->GetSize(-1)) ;
-		// diagnostic: confirm the whole sample made it into RAM (size + tail value)
-		{
-			int dsz=wave->GetSize(-1) ;
-			int dch=wave->GetChannelCount(-1) ;
-			short *dsb=(short *)wave->GetSampleBuffer(-1) ;
-			long dlast=(dsz>0)?(long)(dsz-1)*dch:0 ;
-			Trace::Log("loadSample","loaded size=%d ch=%d first=%d last=%d",
-				dsz,dch,dsb?dsb[0]:0,dsb?dsb[dlast]:0) ;
-		}
-		wave->Close() ;
-		return true ;
-	} else {
+	if (!wave) {
 		Trace::Error("Failed to load samples %s",wavPath.GetName().c_str()) ;
 		return false ;
- 	}
+	}
+	// Pull the whole sample into RAM. If that fails (out of memory -- a long
+	// sample on a 1GB device), reject it cleanly rather than leaving a dead slot
+	// in the pool that would later play a null/garbage buffer. Load BEFORE
+	// publishing the slot so there is nothing to roll back on failure.
+	if (!wave->GetBuffer(0,wave->GetSize(-1))) {
+		Status::Set("Sample too big: %s",wavPath.GetName().c_str()) ;
+		delete wave ;
+		return false ;
+	}
+	wave->Close() ;
+	wav_[count_]=wave ;
+	const std::string name=wavPath.GetName() ;
+	names_[count_]=(char*)SYS_MALLOC(name.length()+1) ;
+	strcpy(names_[count_],name.c_str()) ;
+	count_++ ;
+	return true ;
 }
 
-#define IMPORT_CHUNK_SIZE 1000
+// Big chunks: the copy is dominated by per-call syscall overhead on the SD card,
+// so 64KB cuts a multi-MB import from thousands of read/write pairs to dozens.
+#define IMPORT_CHUNK_SIZE 65536
 
 int SamplePool::ImportSample(Path &path) {
 
@@ -189,15 +189,19 @@ int SamplePool::ImportSample(Path &path) {
 		return -1 ;
 	} ;
 
-	// copy file to current project
+	// copy file to current project (64KB chunks on the heap -- too big for the
+	// stack, and we don't want to assume an 8MB stack on whatever thread runs this)
 
-	char buffer[IMPORT_CHUNK_SIZE] ;
-	while (size>0) {
-		int count=(size>IMPORT_CHUNK_SIZE)?IMPORT_CHUNK_SIZE:size ;
-		fin->Read(buffer,1,count) ;
-		fout->Write(buffer,1,count) ;
-		size-=count ;
-	} ;
+	char *buffer=(char *)SYS_MALLOC(IMPORT_CHUNK_SIZE) ;
+	if (buffer) {
+		while (size>0) {
+			int count=(size>IMPORT_CHUNK_SIZE)?IMPORT_CHUNK_SIZE:size ;
+			fin->Read(buffer,1,count) ;
+			fout->Write(buffer,1,count) ;
+			size-=count ;
+		} ;
+		SAFE_FREE(buffer) ;
+	}
 
 	fin->Close() ;
 	fout->Close() ;

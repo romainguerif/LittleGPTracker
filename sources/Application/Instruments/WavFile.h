@@ -35,6 +35,7 @@ private:
 	int bytePerSample_ ; // original file: 1/2/3/4 bytes (8/16/24/32 bit)
 	bool isFloat_ ; // true if the data is 32-bit IEEE float (else signed int)
 	int dataPosition_ ; // offset in file to get to data
+	long filePos_ ; // current file read position, to skip redundant seeks
 
 	static int bufferChunkSize_ ;
 	static bool initChunkSize_ ;

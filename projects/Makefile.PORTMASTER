@@ -22,7 +22,14 @@ SYSROOT     := $(shell $(CROSS_COMPILE)gcc --print-sysroot)
 SDL_CFLAGS  := $(shell $(SYSROOT)/usr/bin/sdl2-config --cflags)
 SDL_LIBS    := $(shell $(SYSROOT)/usr/bin/sdl2-config --libs)
 
-OPT_FLAGS = -O3 -mlittle-endian -mabi=lp64 -march=armv8-a+crypto+crc -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -dumpbase
+# Tuned for the Trimui Brick (Allwinner A133P, in-order quad Cortex-A53). -mcpu
+# replaces the generic -march so GCC schedules for the real core; -ffast-math +
+# -fno-math-errno let the float DSP (EQ/compressor/LFO/ADSR, mix sum, delay)
+# vectorise + use FMA; -funroll-loops helps the tight per-sample render loop.
+# (The denormal flush is set explicitly via FPCR at runtime, so FTZ is covered.)
+# This is the Makefile the Trimui build actually uses (build_trimui.sh runs make
+# here); the optimisation flags had previously only been set in an unused file.
+OPT_FLAGS = -O3 -mlittle-endian -mabi=lp64 -mcpu=cortex-a53+crc+crypto -ffast-math -fno-math-errno -funroll-loops -fomit-frame-pointer
 INCLUDES = -Iinclude $(SDL_CFLAGS) -I/usr/include/ -I/usr/include/aarch64-linux-gnu/ -I/usr/include/aarch64-linux-gnu/c++/9/ -I$(PWD)/../sources
 CFLAGS	:= $(DEFINES) $(INCLUDES) $(OPT_FLAGS) -Wall
 CXXFLAGS:= $(CFLAGS) -std=gnu++03

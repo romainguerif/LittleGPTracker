@@ -6,11 +6,10 @@ hope it will work :D
 
 /*-------------------------------------------
 some useful abstract info:
- there are 8 filters, one per voice. each filter
- is stereo, so there are 2 height and speed vars.
- The filters are static/globals, so that when
- calling the action can be resumed when calling
- buffer rendering again (removing clics)
+ there is one filter per voice (SONG_CHANNEL_COUNT of them -- the array is sized
+ by that, not the literal 8 this comment used to claim). each filter is stereo,
+ so there are 2 height and speed vars. The filters are static/globals, so the
+ state resumes between buffer renders (removing clics).
 -------------------------------------------*/
 
 #include "Application/Utils/fixed.h"

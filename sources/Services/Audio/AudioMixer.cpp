@@ -37,10 +37,17 @@ public:
 		while (!shouldTerminate()) {
 			go_->Wait() ;
 			if (shouldTerminate()) break ;
-			for (int i=first_;i<last_;i++) {
-				gotData_[i]=children_[i]->Render(scratch_[i],n_) ;
+			try {
+				for (int i=first_;i<last_;i++) {
+					gotData_[i]=children_[i]->Render(scratch_[i],n_) ;
+				}
+			} catch (...) {
+				// A voice threw (e.g. bad_alloc): drop this block's worker half
+				// instead of letting the exception kill the thread and leave the
+				// audio thread blocked forever on done_ (permanent audio deadlock).
+				for (int i=first_;i<last_;i++) gotData_[i]=false ;
 			}
-			done_->Post() ;
+			done_->Post() ; // ALWAYS post -- the audio thread's barrier must never hang
 		}
 		return false ;
 	}
@@ -118,7 +125,10 @@ void AudioMixer::SetParallel(bool enable) {
 		if (worker_) {
 			worker_->RequestTermination() ;
 			worker_->go_->Post() ; // wake it so it can see the termination flag
-			while (!worker_->IsFinished()) { /* brief */ }
+			// Clean join (SDL_WaitThread under the hood): blocks until the worker
+			// returns and releases its OS handle -- no busy-wait, no -O3 hoist hang,
+			// no leaked SDL_Thread on each SetParallel cycle.
+			SysProcessFactory::GetInstance()->JoinThread(*worker_) ;
 			delete worker_ ;
 			worker_=0 ;
 		}
@@ -304,7 +314,9 @@ fixed AudioMixer::softClip(fixed sample) {
 
     x = data->alphaInv * (sampleFloat / maxFloat);
     if (x > -1.0f && x < 1.0f) {
-        sampleFloat = maxFloat * (data->alpha * (x - (pow(x, 3.0f) / 3.0f)));
+        // x^3 directly: pow() here ran per output sample and is ~20-50x dearer
+        // than the multiply for the same result (x is already bounded to (-1,1)).
+        sampleFloat = maxFloat * (data->alpha * (x - (x * x * x / 3.0f)));
     } else {
         sampleFloat = maxFloat * data->alpha23;
     }

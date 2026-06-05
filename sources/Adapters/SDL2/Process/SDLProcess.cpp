@@ -17,6 +17,16 @@ bool SDLProcessFactory::BeginThread(SysThread& thread) {
 	return (t!=0) ;
 }
 
+void SDLProcessFactory::JoinThread(SysThread &thread) {
+	// Real OS join: block until the thread returns AND release the SDL_Thread
+	// handle (otherwise it leaks on every SetParallel cycle). No spin, no -O3 hang.
+	SDL_Thread *t = (SDL_Thread *)thread.GetOSHandle() ;
+	if (t) {
+		SDL_WaitThread(t, NULL) ;
+		thread.SetOSHandle(0) ;
+	}
+} ;
+
 SysSemaphore *SDLProcessFactory::CreateNewSemaphore(int initialcount, int maxcount) {
 	return new SDLSysSemaphore(initialcount,maxcount) ;
 } ;

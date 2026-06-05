@@ -7,6 +7,7 @@
 class SDLProcessFactory:public SysProcessFactory {
 	bool BeginThread(SysThread &) ;
 	virtual SysSemaphore *CreateNewSemaphore(int initialcount = 0, int maxcount = 0) ;
+	virtual void JoinThread(SysThread &) ;
 } ;
 
 class SDLSysSemaphore:public SysSemaphore {

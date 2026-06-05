@@ -5,6 +5,8 @@
 #include "Foundation/Types/Types.h"
 #include <stdio.h>   // remove() / rename() for the atomic save-replace
 #include <string>
+#include <fcntl.h>   // open() — fsync the temp before rename (durability)
+#include <unistd.h>  // fsync()
 
 PersistencyService::PersistencyService():Service(MAKE_FOURCC('S','V','P','S')) {
 } ;
@@ -37,6 +39,12 @@ void PersistencyService::Save(const char *name) {
 
 	::remove(tmpPath.c_str()) ;            // make sure the temp is brand-new
 	if (doc.SaveFile()) {                  // write the fresh, clean document
+		// Force the temp's bytes to disk BEFORE it becomes the real file. This
+		// build defines _64BIT, which compiles out the fsync in UnixFile::Close,
+		// so without this a power cut right after the rename could leave a 0-byte
+		// / partially-written project -> black screen on the next load.
+		int fd=::open(tmpPath.c_str(),O_RDONLY) ;
+		if (fd>=0) { ::fsync(fd) ; ::close(fd) ; }
 		::remove(finalPath.c_str()) ;      // drop the old (non-truncatable) file
 		::rename(tmpPath.c_str(), finalPath.c_str()) ; // atomically swap it in
 	}
