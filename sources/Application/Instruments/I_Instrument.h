@@ -46,6 +46,11 @@ public:
 	 
 	  virtual void ProcessCommand(int channel,FourCC cc,ushort value)=0 ;
 
+	  // Push the instrument's current knob values into any voices it is currently
+	  // playing, so editing volume/cutoff/etc. is heard in REAL TIME instead of only
+	  // on the next note. Default no-op (e.g. MIDI); the sample instrument overrides.
+	  virtual void RefreshActiveVoiceParams() {} ;
+
 	  virtual void Purge()=0 ;
 
 	  virtual int GetTable()=0 ;

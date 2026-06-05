@@ -1434,8 +1434,42 @@ void SampleInstrument::Update(Observable &o,I_ObservableData *d)
 	};
 } ;
 
+// Re-seed the BASE per-voice params of every voice this instrument is currently
+// playing from the instrument's current knob values, so editing volume / cutoff /
+// reso / pan / crush / drive / EQ / LFO / delay-send / downsample is heard in REAL
+// TIME on the sustaining/looping note instead of only on the next trigger. We only
+// touch the "base" values (and the matching current value); FX-command/LFO offsets
+// are applied ON TOP of the base each K-rate, so automation keeps working. Called
+// from the instrument views on the UI thread after an edit; each field is a single
+// aligned word, so the audio thread reading it concurrently is safe (at worst it
+// uses the value one block late -- inaudible). Voices not playing this instrument
+// have finished_=true and are skipped; a stale write would be harmless anyway since
+// the next trigger re-seeds everything.
+void SampleInstrument::RefreshActiveVoiceParams() {
+	for (int channel=0;channel<SONG_CHANNEL_COUNT;channel++) {
+		renderParams *rp=renderParams_+channel ;
+		if (rp->finished_) continue ; // not an active voice of this instrument
+		rp->volume_=rp->baseVolume_=i2fp(volume_->GetInt()) ;
+		rp->attenuate_=i2fp(attenuate_->GetInt()) ;
+		rp->pan_=rp->basePan_=i2fp(pan_->GetInt()) ;
+		rp->cutoff_=rp->baseFCut_=fl2fp(cutoff_->GetInt()/255.0f) ;
+		rp->reso_=rp->baseFRes_=fl2fp(reso_->GetInt()/255.0f) ;
+		rp->baseFbTun_=rp->fbTun_=fl2fp(fbTune_->GetInt()/255.0f) ;
+		rp->baseFbMix_=rp->fbMix_=fl2fp(fbMix_->GetInt()/255.0f) ;
+		rp->crush_=crush_->GetInt() ;
+		rp->drive_=drive_->GetInt() ;
+		rp->eqLow_=eqLow_->GetInt() ;
+		rp->eqMid_=eqMid_->GetInt() ;
+		rp->eqHigh_=eqHigh_->GetInt() ;
+		rp->lfoRate_=lfoRate_->GetInt() ;
+		rp->lfoDepth_=lfoDepth_->GetInt() ;
+		rp->delaySend_=delaySend_->GetInt() ;
+		rp->downsample_=downsample_->GetInt() ;
+	}
+}
+
 void SampleInstrument::ProcessCommand(int channel,FourCC cc,ushort value) {
-	
+
  	renderParams *rp=renderParams_+channel ;
 	if (!source_) return ;
 

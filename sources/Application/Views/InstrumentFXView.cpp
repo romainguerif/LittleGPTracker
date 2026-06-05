@@ -219,6 +219,14 @@ void InstrumentFXView::ProcessButtonMask(unsigned short mask, bool pressed) {
 
 	FieldView::ProcessButtonMask(mask) ;
 
+	// Real-time FX edits: push the (possibly just-edited) comp/EQ/LFO/delay-send
+	// values into any voice this instrument is currently playing, so the change is
+	// heard immediately instead of only on the next note.
+	{
+		I_Instrument *instr=viewData_->project_->GetInstrumentBank()->GetInstrument(viewData_->currentInstrument_) ;
+		if (instr) instr->RefreshActiveVoiceParams() ;
+	}
+
 	// R + DOWN : back to the instrument page (mirrors instrument -> FX via R+UP)
 	if (mask & EPBM_R) {
 		if (mask & EPBM_DOWN) {

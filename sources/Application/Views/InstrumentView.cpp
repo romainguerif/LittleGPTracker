@@ -349,6 +349,16 @@ void InstrumentView::ProcessButtonMask(unsigned short mask,bool pressed) {
 
 	FieldView::ProcessButtonMask(mask) ;
 
+	// Real-time knob edits: push the (possibly just-edited) instrument values into
+	// any voice it is currently playing, so the change is heard immediately instead
+	// of only on the next note. No-op for non-sample instruments / when nothing
+	// changed (cheap re-copy).
+	{
+		InstrumentBank *bank=viewData_->project_->GetInstrumentBank() ;
+		I_Instrument *instr=bank->GetInstrument(viewData_->currentInstrument_) ;
+		if (instr) instr->RefreshActiveVoiceParams() ;
+	}
+
     Player *player=Player::GetInstance() ;
 	// B Modifier
 

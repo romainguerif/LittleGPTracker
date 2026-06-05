@@ -91,6 +91,7 @@ public:
 
 	   virtual InstrumentType GetType() { return IT_SAMPLE ; } ;
   	   virtual void ProcessCommand(int channel,FourCC cc,ushort value) ;
+	   virtual void RefreshActiveVoiceParams() ; // live knob edits -> currently-playing voices
 	   virtual void Purge() ;
 	   virtual int GetTable() ;
 	   virtual bool GetTableAutomation();
