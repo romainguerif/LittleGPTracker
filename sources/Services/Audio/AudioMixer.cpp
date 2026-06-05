@@ -1,8 +1,10 @@
 #include "AudioMixer.h"
 #include "System/System/System.h"
 #include "System/Process/Process.h"
+#include "System/Console/Trace.h"
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
 
 #define MAX_POSITIVE_FIXED i2fp(32767)
 #define MAX_NEGATIVE_FIXED i2fp(-32768)
@@ -14,7 +16,7 @@
 // locking is needed -- just a go/done handshake around each block.
 class MixRenderWorker : public SysThread {
 public:
-	MixRenderWorker():children_(0),scratch_(0),gotData_(0),first_(0),last_(0),n_(0) {
+	MixRenderWorker():children_(0),scratch_(0),gotData_(0),first_(0),last_(0),n_(0),reqGen_(0),ackGen_(0) {
 		go_=SysSemaphore::Create(0,1) ;
 		done_=SysSemaphore::Create(0,1) ;
 	}
@@ -22,11 +24,10 @@ public:
 #if defined(__aarch64__)
 		// Flush denormals to zero on THIS thread too. FPCR is per-thread, and the
 		// audio thread sets it in AudioOutDriver::Trigger() -- but this helper
-		// renders the master's SECOND HALF of buses (channels 9-16 + the preview
-		// stream). Without the flush, decaying sample tails / EQ / feedback drift
-		// into denormals, which are ~100x slower on Cortex-A53. The worker then
-		// can't keep up, the audio thread stalls at the barrier, and exactly those
-		// worker-rendered voices "play their start then cut". Set FPCR.FZ once.
+		// renders the master's SECOND HALF of buses. Without the flush, decaying
+		// sample tails / EQ / feedback drift into denormals, which are ~100x slower
+		// on Cortex-A53 and would make the worker miss its barrier deadline. Set
+		// FPCR.FZ once on the worker thread.
 		{
 			unsigned long fpcr ;
 			__asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr)) ;
@@ -37,6 +38,7 @@ public:
 		while (!shouldTerminate()) {
 			go_->Wait() ;
 			if (shouldTerminate()) break ;
+			unsigned g=reqGen_ ;   // the request we are about to serve
 			try {
 				for (int i=first_;i<last_;i++) {
 					gotData_[i]=children_[i]->Render(scratch_[i],n_) ;
@@ -45,8 +47,11 @@ public:
 				// A voice threw (e.g. bad_alloc): drop this block's worker half
 				// instead of letting the exception kill the thread and leave the
 				// audio thread blocked forever on done_ (permanent audio deadlock).
+				Trace::Error("MixRenderWorker: render threw, dropping buses [%d,%d)",first_,last_) ;
 				for (int i=first_;i<last_;i++) gotData_[i]=false ;
 			}
+			__sync_synchronize() ;  // publish the scratch writes before acking
+			ackGen_=g ;             // signal THIS request is fully rendered
 			done_->Post() ; // ALWAYS post -- the audio thread's barrier must never hang
 		}
 		return false ;
@@ -55,6 +60,7 @@ public:
 	fixed **scratch_ ;
 	bool *gotData_ ;
 	int first_,last_,n_ ;
+	volatile unsigned reqGen_,ackGen_ ; // generation handshake (bulletproof barrier)
 	SysSemaphore *go_,*done_ ;
 } ;
 
@@ -241,13 +247,26 @@ bool AudioMixer::sumChildrenParallel(fixed *buffer,int samplecount) {
     worker_->first_=half ;
     worker_->last_=nc ;
     worker_->n_=samplecount ;
+    unsigned myGen = ++worker_->reqGen_ ;  // new render request for the helper
+    __sync_synchronize() ;                 // publish fields + reqGen_ before the kick
     worker_->go_->Post() ;                 // kick the helper
 
     for (int i=0;i<half;i++) {             // render our share in parallel
-        childGotData_[i]=childList_[i]->Render(childScratch_[i],samplecount) ;
+        try {
+            childGotData_[i]=childList_[i]->Render(childScratch_[i],samplecount) ;
+        } catch (...) {
+            childGotData_[i]=false ;       // never skip the barrier below on a throw
+        }
     }
 
-    worker_->done_->Wait() ;               // barrier: wait for the helper
+    // Barrier (acquire). done_ blocks us until the worker signals; we then spin
+    // until it has acked THIS exact generation (defensive: never sum a scratch the
+    // worker hasn't finished for this block), and finally an acquire fence before
+    // we read the worker's scratch. Pairs with the worker's release
+    // __sync_synchronize() before it sets ackGen_.
+    worker_->done_->Wait() ;
+    while (worker_->ackGen_ != myGen) { }
+    __sync_synchronize() ; // ACQUIRE: make the worker's scratch writes visible here
 
     int total=samplecount*2 ;
     memset(buffer,0,total*sizeof(fixed)) ;

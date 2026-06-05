@@ -4,8 +4,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-
-Trace::Trace() 
+Trace::Trace()
 :logger_(0)
 {
 }

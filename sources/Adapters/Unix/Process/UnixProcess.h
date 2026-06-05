@@ -19,6 +19,9 @@ public:
 	virtual SysSemaphoreResult WaitTimeout(unsigned long) ;
 	virtual SysSemaphoreResult Post() ;
 private:
-	sem_t *sem_ ;
+	// Private, unnamed, per-instance POSIX semaphore. (Was sem_t* opened by NAME
+	// with a single hardcoded string -> every SysSemaphore aliased ONE kernel
+	// counter, see the .cpp.)
+	sem_t sem_ ;
 } ;
 #endif
