@@ -5,6 +5,7 @@
 #include "Services/Time/TimeService.h"
 #include "Application/Model/Config.h"
 #include <stdlib.h>
+#include <math.h>
 
 int WavFile::bufferChunkSize_=-1 ;
 bool WavFile::initChunkSize_=true ;
@@ -54,6 +55,11 @@ WavFile::WavFile(I_File *file) {
 	filePos_=-1 ;
 	loadedFrames_=0 ;
 	streaming_=false ;
+	xfBackup_=0 ;
+	xfBackupFrame_=0 ;
+	xfBackupFrames_=0 ;
+	bakedLoopStart_=-1 ;
+	bakedLoopEnd_=-1 ;
 	file_=file ;
 } ;
 
@@ -64,6 +70,7 @@ WavFile::~WavFile() {
 	}
 	SAFE_FREE(samples_) ;
 	SAFE_FREE(readBuffer_) ;
+	SAFE_FREE(xfBackup_) ;
 } ;
 
 WavFile *WavFile::Open(const char *path) {
@@ -443,6 +450,49 @@ bool WavFile::PrepareStreamLoad() {
 bool WavFile::IsReady() {
 	if (!streaming_) return true ;
 	return GetLoadedFrames()>=(long)size_ ;
+}
+
+// Loop de-click via crossfade, baked into the sample buffer (the hot render loop
+// stays untouched -- it just plays a buffer whose loop seam is already smooth).
+// Blend the X frames ending at loopEnd with the X frames ending at loopStart, so
+// that as playback nears loopEnd it morphs toward the audio just BEFORE loopStart;
+// the wrap loopEnd->loopStart is then continuous (orig[loopStart-1] -> orig[loopStart]).
+// Idempotent per loop config; a previous bake is restored before a new one. Called
+// at note trigger on the sequencer thread (under the mixer lock, before the block's
+// render), so there is no concurrent read of samples_.
+#define WAV_XFADE_MAX 512 // frames (~12 ms @ 44.1k)
+void WavFile::ApplyLoopCrossfade(int loopStart,int loopEnd) {
+	if (!samples_) return ;
+	if (loopStart==bakedLoopStart_ && loopEnd==bakedLoopEnd_) return ; // already baked
+	int ch=channelCount_ ;
+	// restore any previous (different) bake so we blend from original data
+	if (xfBackup_) {
+		for (int i=0;i<xfBackupFrames_*ch;i++) samples_[xfBackupFrame_*ch+i]=xfBackup_[i] ;
+		SAFE_FREE(xfBackup_) ;
+		xfBackupFrames_=0 ; bakedLoopStart_=bakedLoopEnd_=-1 ;
+	}
+	if (loopStart<0 || loopEnd>size_ || loopEnd<=loopStart) return ;
+	int loopLen=loopEnd-loopStart ;
+	int X=WAV_XFADE_MAX ;
+	if (X>loopStart) X=loopStart ;   // need X frames of audio before loopStart
+	if (X>loopLen/2)  X=loopLen/2 ;  // and at most half the loop
+	if (X<8) return ;                // too short to be worth it / smooth
+	int base=loopEnd-X ;
+	xfBackup_=(short *)SYS_MALLOC(X*ch*sizeof(short)) ;
+	if (!xfBackup_) return ;
+	for (int i=0;i<X*ch;i++) xfBackup_[i]=samples_[base*ch+i] ; // save original tail
+	xfBackupFrame_=base ; xfBackupFrames_=X ;
+	for (int i=0;i<X;i++) {
+		float w=0.5f-0.5f*cosf((float)M_PI*(float)i/(float)(X-1)) ; // 0 -> 1 raised cosine
+		for (int c=0;c<ch;c++) {
+			int tail=xfBackup_[i*ch+c] ;                  // original [loopEnd-X+i]
+			int pre =samples_[(loopStart-X+i)*ch+c] ;     // original [loopStart-X+i] (untouched)
+			int v=(int)lrintf(tail*(1.0f-w)+pre*w) ;
+			if (v>32767) v=32767 ; else if (v<-32768) v=-32768 ;
+			samples_[base*ch+i*ch+c]=(short)v ;
+		}
+	}
+	bakedLoopStart_=loopStart ; bakedLoopEnd_=loopEnd ;
 }
 
 // Decode frames [frameStart, frameStart+frameCount) from the file into samples_

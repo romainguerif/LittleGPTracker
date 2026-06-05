@@ -21,6 +21,7 @@ public:
 	void Close() ;
 	virtual bool IsMulti() {return false ; } ;
 	virtual bool IsReady() ; // false while a background stream-in is still filling
+	virtual void ApplyLoopCrossfade(int loopStart,int loopEnd) ; // seamless-loop de-click
 
 	// ---- background "stream-in" loading -------------------------------------
 	// Same end result as GetBuffer(0,GetSize()) -- the whole sample ends up in
@@ -51,6 +52,13 @@ private:
 	long filePos_ ; // current file read position, to skip redundant seeks
 	volatile long loadedFrames_ ; // stream-in watermark: frames decoded & visible to playback
 	bool streaming_ ; // true if this file is being filled by the background loader
+	// Loop-crossfade bake state (de-click): the loop-end region is blended in place;
+	// xfBackup_ holds the original samples of that region so a different loop config
+	// can be restored before re-baking. bakedLoopStart_/End_ = currently baked config.
+	short *xfBackup_ ;
+	int xfBackupFrame_ ; // first frame of the baked region (loopEnd - X)
+	int xfBackupFrames_ ; // X (frames)
+	int bakedLoopStart_, bakedLoopEnd_ ;
 
 	static int bufferChunkSize_ ;
 	static bool initChunkSize_ ;

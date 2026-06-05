@@ -18,6 +18,10 @@ public:
 	// so a voice doesn't trigger on a half-filled buffer. (Keeps the hot render
 	// loop untouched: the gate is one check at note trigger.)
 	virtual bool IsReady() { return true ; }
+	// De-click a loop by pre-blending the loop-end region with the pre-loopStart
+	// audio (crossfade), so the loopEnd->loopStart wrap is seamless. Default no-op;
+	// WavFile bakes it into the sample buffer. Idempotent per loop config.
+	virtual void ApplyLoopCrossfade(int loopStart,int loopEnd) {}
 } ;
 
 #endif

@@ -334,6 +334,18 @@ bool SampleInstrument::Start(int channel,unsigned char midinote,bool cleanstart)
 		 rp->rendLoopEnd_ = (rp->midiNote_ + 1) * slice;
 	 }
 
+	 // Loop de-click (Ableton-style crossfade): pre-blend the loop-end region with
+	 // the audio that precedes loopStart so the wrap loopEnd->loopStart is seamless.
+	 // Baked into the sample buffer once per loop config (idempotent, restorable);
+	 // the hot render loop is left completely untouched. FORWARD loops only -- NOT
+	 // ping-pong (which reflects at the boundary instead of wrapping, so blending
+	 // the end toward the start would corrupt the reflection) nor OSC/one-shot.
+	 // Safe vs render: Start runs in the sequencer tick, under the mixer lock,
+	 // BEFORE the block's render -- no concurrent read of samples_.
+	 if (loopmode==SILM_LOOP || loopmode==SILM_LOOPSYNC) {
+		 source_->ApplyLoopCrossfade(rp->rendLoopStart_,rp->rendLoopEnd_) ;
+	 }
+
 	 switch (loopmode) {
 		 case SILM_ONESHOT:
 		 case SILM_LOOP:
