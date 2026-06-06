@@ -5,9 +5,22 @@
 #include "System/Console/Trace.h"
 #include "System/System/System.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <sched.h>
+
+// Write a sysfs value (raw; LGPT globally redefines fopen). No-op if absent.
+static void writeSys(const char *path, const char *val) {
+    int fd = open(path, O_WRONLY);
+    if (fd >= 0) {
+        ssize_t w = write(fd, val, strlen(val));
+        (void)w;
+        close(fd);
+    }
+}
 
 // ---- thread trampolines ----------------------------------------------------
 
@@ -80,6 +93,17 @@ bool ALSAAudioDriver::openPcm() {
             strcpy(dev, "default"); // no USB device: internal codec
     }
 
+    // sunxi USB anti-glitch (same recipe that stabilised capture in M8Tape):
+    // smaller/more frequent isochronous transfers + no USB autosuspend, and force
+    // the sound card's power on. Cuts the periodic USB-audio crackle.
+    writeSys("/sys/module/snd_usb_audio/parameters/nrpacks", "1");
+    writeSys("/sys/module/usbcore/parameters/autosuspend", "-1");
+    for (int c = 0; c < 4; c++) {
+        char pc[96];
+        snprintf(pc, sizeof(pc), "/sys/class/sound/card%d/device/../power/control", c);
+        writeSys(pc, "on");
+    }
+
     int err = snd_pcm_open(&pcm_, dev, SND_PCM_STREAM_PLAYBACK, 0);
     if (err < 0) {
         Trace::Error("ALSAAudio: open(%s) failed: %s", dev, snd_strerror(err));
@@ -87,12 +111,18 @@ bool ALSAAudioDriver::openPcm() {
         return false;
     }
 
-    // Target buffering: ~4 render blocks. soft_resample=1 lets the device run at
-    // its native rate while we feed 44100 (so the engine's 44100 clock holds).
-    unsigned int latency_us =
-        (unsigned int)((long long)settings_.bufferSize_ * 4 * 1000000 / 44100);
-    if (latency_us < 20000)
-        latency_us = 20000;
+    // Target buffering. Bigger = more headroom against render spikes / USB
+    // hiccups (fewer crackles), at the cost of play-along latency (the MIDI sync
+    // stays exact regardless, via snd_pcm_delay). Tunable: AUDIOOUTLATENCY (ms).
+    unsigned int latency_us = 120000; // ~120 ms default
+    const char *lat = Config::GetInstance()->GetValue("AUDIOOUTLATENCY");
+    if (lat && lat[0]) {
+        int ms = atoi(lat);
+        if (ms >= 20 && ms <= 500)
+            latency_us = (unsigned int)ms * 1000;
+    }
+    // soft_resample=1 lets the device run at its native rate while we feed 44100
+    // (so the engine's fixed 44100 clock holds).
     err = snd_pcm_set_params(pcm_, SND_PCM_FORMAT_S16_LE,
                              SND_PCM_ACCESS_RW_INTERLEAVED, 2, 44100,
                              1 /*soft resample*/, latency_us);
@@ -179,6 +209,12 @@ void ALSAAudioDriver::notifyFeed() {
 
 // Producer: render ahead into the pool whenever the consumer signals room.
 void ALSAAudioDriver::feedBody(ALSAThread *self) {
+    // Elevated priority so render keeps the pool filled ahead of the out thread
+    // (a starved pool = ALSA underrun = crackle). A notch below the out thread.
+    struct sched_param sp;
+    sp.sched_priority = 60;
+    pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
+
     while (!self->ShouldStop()) {
         feedSem_->Wait();
         while (needsBuffering() && !self->ShouldStop())
@@ -189,6 +225,13 @@ void ALSAAudioDriver::feedBody(ALSAThread *self) {
 // Consumer: write each rendered block to ALSA, then set MidiClock's played-frame
 // to (frames_written - snd_pcm_delay) = exactly what is audible right now.
 void ALSAAudioDriver::outBody(ALSAThread *self) {
+    // Run the output thread at real-time priority (SDL drove its audio callback
+    // on an RT thread; our plain thread would otherwise be preempted mid-block,
+    // draining the ALSA buffer -> crackle). Best-effort: ignore if not permitted.
+    struct sched_param sp;
+    sp.sched_priority = 70;
+    pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
+
     while (!self->ShouldStop()) {
         if (pool_[poolPlayPosition_].buffer_ == 0) {
             // Pool empty (producer behind): ask for more and wait briefly. We do

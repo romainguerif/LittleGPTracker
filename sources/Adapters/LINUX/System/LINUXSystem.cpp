@@ -122,7 +122,7 @@ void LINUXSystem::Boot(int argc,char **argv) {
 	Trace::Log("System","Installing ALSA audio (direct, latency-synced MIDI)") ;
 	AudioSettings alsaHint;
 	alsaHint.bufferSize_ = 1024;
-	alsaHint.preBufferCount_ = 8;
+	alsaHint.preBufferCount_ = 12; // extra pool cushion vs render spikes (crackle)
 	Audio::Install(new ALSAAudio(alsaHint));
 #endif
 
