@@ -43,6 +43,10 @@
 #include "Adapters/SDL2/Audio/SDLAudio.h"
 #endif
 
+#ifdef ALSAAUDIO
+#include "Adapters/ALSA/Audio/ALSAAudio.h"
+#endif
+
 EventManager *LINUXSystem::eventManager_ = NULL;
 static int secbase = 0;
 
@@ -112,6 +116,14 @@ void LINUXSystem::Boot(int argc,char **argv) {
 	hint.bufferSize_ = 1024;
 	hint.preBufferCount_ = 8;
 	Audio::Install(new SDLAudio(hint));
+#endif
+
+#ifdef ALSAAUDIO
+	Trace::Log("System","Installing ALSA audio (direct, latency-synced MIDI)") ;
+	AudioSettings alsaHint;
+	alsaHint.bufferSize_ = 1024;
+	alsaHint.preBufferCount_ = 8;
+	Audio::Install(new ALSAAudio(alsaHint));
 #endif
 
 #ifdef DUMMYMIDI

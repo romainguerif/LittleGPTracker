@@ -34,6 +34,9 @@ public:
 
 	// --- played side (audio callback thread) ---
 	void AdvancePlayed(int frames);   // played_ += frames; republish anchor (now)
+	// Set the absolute played-frame (ALSA: frames_written - snd_pcm_delay()),
+	// republishing the anchor at 'now'. Monotonic: never moves backwards.
+	void SetPlayed(unsigned long long played);
 
 	// --- scheduler thread ---
 	// Best estimate of the current played-frame, interpolated from the last anchor.

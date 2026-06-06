@@ -10,7 +10,7 @@ DEFINES := \
 	-D_NDEBUG \
 	-D_NO_JACK_ \
 	-DSDL2 \
-        -DSDLAUDIO \
+        -DALSAAUDIO \
         -DALSAMIDI
 
 CROSS_COMPILE:=/usr/bin/aarch64-linux-gnu-
@@ -33,7 +33,7 @@ OPT_FLAGS = -O3 -mlittle-endian -mabi=lp64 -mcpu=cortex-a53+crc+crypto -ffast-ma
 INCLUDES = -Iinclude $(SDL_CFLAGS) -I/usr/include/ -I/usr/include/aarch64-linux-gnu/ -I/usr/include/aarch64-linux-gnu/c++/9/ -I$(PWD)/../sources
 CFLAGS	:= $(DEFINES) $(INCLUDES) $(OPT_FLAGS) -Wall
 CXXFLAGS:= $(CFLAGS) -std=gnu++03
-LIBS	:= $(SDL_LIBS) -lSDL2 -lSDL2_mixer -lpthread
+LIBS	:= $(SDL_LIBS) -lSDL2 -lSDL2_mixer -lasound -lpthread
 OUTPUT = ../lgpt-port
 EXTENSION:= elf
 

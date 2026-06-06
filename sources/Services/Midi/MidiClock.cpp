@@ -30,6 +30,16 @@ void MidiClock::AdvancePlayed(int frames) {
 	__sync_synchronize(); gen_ = gen_ + 1;   // -> even: write done
 }
 
+void MidiClock::SetPlayed(unsigned long long played) {
+	// Monotonic guard: snd_pcm_delay() jitter must never move played backwards.
+	if (played < anchorPlayed_) played = anchorPlayed_;
+	unsigned long long now = NowNs();
+	gen_ = gen_ + 1; __sync_synchronize();   // -> odd: write in progress
+	anchorPlayed_ = played;
+	anchorNs_ = now;
+	__sync_synchronize(); gen_ = gen_ + 1;   // -> even: write done
+}
+
 unsigned long long MidiClock::InterpolatedPlayed() const {
 	unsigned long long played, ns; unsigned g0, g1;
 	int tries = 0;
