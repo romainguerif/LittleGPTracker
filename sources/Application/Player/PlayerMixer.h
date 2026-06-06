@@ -30,6 +30,7 @@ public:
 	void OnPlayerStop() ;
 
 	void StartInstrument(int channel,I_Instrument *instrument,unsigned char note,bool newInstrument) ;
+	void PreviewInstrument(int channel,I_Instrument *instrument,unsigned char note) ;
 	void StopInstrument(int channel) ;
 
 	int GetChannelNote(int Channel) ;

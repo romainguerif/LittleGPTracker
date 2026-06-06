@@ -8,7 +8,7 @@ class Chain {
 public:
 	Chain() ;
 	~Chain() ;
-	unsigned short GetNext() ;
+	unsigned short GetNext(int start=0) ;
 	bool IsUsed(unsigned char i) { return isUsed_[i] ; } ;
 	void SetUsed(unsigned char c) ;
 	void ClearAllocation() ;

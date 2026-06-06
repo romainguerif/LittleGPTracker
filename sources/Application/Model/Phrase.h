@@ -9,7 +9,7 @@ class Phrase {
 public:
 	Phrase() ;
 	~Phrase() ;
-	unsigned short GetNext() ;
+	unsigned short GetNext(int start=0) ;
 	bool IsUsed(uchar i) { return isUsed_[i] ; } ;
 	void SetUsed(uchar c) ;
 	void ClearAllocation() ;

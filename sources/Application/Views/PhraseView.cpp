@@ -274,21 +274,35 @@ void PhraseView::updateCursorValue(ViewUpdateDirection direction, int xOffset,
         }
     }
     Player *player = Player::GetInstance();
-    // Phrase FX params are currently not applied to preview
     if (col_ == 0 || col_ == 1 || col_ == 2 || col_ == 3 || col_ == 4 ||
         col_ == 5) {
         if (player->IsRunning()) {
+            // While auditioning, restart so the edit is heard in context.
             if ((viewData_->playMode_ == PM_AUDITION)) {
                 player->Stop();
                 player->OnStartButton(PM_AUDITION, viewData_->songX_, false,
                                       viewData_->chainRow_);
             }
-        } else {
-            player->OnStartButton(PM_AUDITION, viewData_->songX_, false,
-                                  viewData_->chainRow_);
+        } else if (col_ == 0 || col_ == 1) {
+            // M8-style: editing the note/instrument plays just this step's note
+            // with its instrument (one-shot), without starting phrase playback.
+            previewStepNote();
         }
     }
     isDirty_ = true;
+}
+
+// Trigger a one-shot preview of the current step's note with its instrument (or
+// the last-used instrument if the step has none). No-op while the sequencer runs.
+void PhraseView::previewStepNote() {
+    int idx = 16 * viewData_->currentPhrase_ + row_;
+    unsigned char note = phrase_->note_[idx];
+    if (note == 0xFF)
+        return;
+    unsigned char instr = phrase_->instr_[idx];
+    if (instr == 0xFF)
+        instr = lastInstr_;
+    Player::GetInstance()->PreviewNote(viewData_->songX_, instr, note);
 }
 
 // If we're on an empty spot, we past the last element
@@ -312,6 +326,7 @@ void PhraseView::pasteLast() {
             c = phrase_->instr_ + (16 * viewData_->currentPhrase_ + row_);
             lastInstr_ = *c;
         }
+        previewStepNote(); // M8-style: hear the note when you place it
         break;
     case 1:
         c = phrase_->instr_ + (16 * viewData_->currentPhrase_ + row_);
@@ -321,6 +336,7 @@ void PhraseView::pasteLast() {
         } else {
             lastInstr_ = *c;
         }
+        previewStepNote();
         break;
     case 2:
         i = phrase_->cmd1_ + (16 * viewData_->currentPhrase_ + row_);

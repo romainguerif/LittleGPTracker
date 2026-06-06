@@ -123,6 +123,15 @@ void PlayerMixer::StartInstrument(int channel,I_Instrument *instrument,unsigned 
 
 } ;
 
+// One-shot note preview (e.g. editing a step, M8-style). Ensure the channel is
+// bound to its mix bus first (binding normally happens during playback; this lets
+// preview work even when stopped / never-played), then trigger the note.
+void PlayerMixer::PreviewInstrument(int channel,I_Instrument *instrument,unsigned char note)  {
+	Mixer *mixer=Mixer::GetInstance() ;
+	channel_[channel]->SetMixBus(mixer->GetBus(channel)) ; // no-op if already bound
+	StartInstrument(channel,instrument,note,true) ;
+} ;
+
 void PlayerMixer::StopInstrument(int channel) {
     channel_[channel]->StopInstrument() ;
     notes_[channel]=0xFF ;

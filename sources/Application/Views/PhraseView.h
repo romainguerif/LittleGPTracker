@@ -23,6 +23,7 @@ class PhraseView : public View {
   protected:
     void updateCursor(int dx, int dy);
     void stopAudition();
+    void previewStepNote(); // one-shot M8-style preview of the current step
     void updateCursorValue(ViewUpdateDirection offset, int xOffset = 0,
                            int yOffset = 0);
     bool isCommandColumn() const;

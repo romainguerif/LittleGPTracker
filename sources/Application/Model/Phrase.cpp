@@ -35,8 +35,13 @@ Phrase::~Phrase() {
 	*/
 } ;
 
-unsigned short Phrase::GetNext() {
-	for (int i=0;i<PHRASE_COUNT;i++) {
+unsigned short Phrase::GetNext(int start) {
+	// Scan from 'start' (wrapping) so a clone lands on the NEXT free id after the
+	// source (e.g. 60 -> 61) instead of the first free id anywhere. start=0 keeps
+	// the original first-free behaviour for non-clone callers.
+	if (start < 0) start = 0 ;
+	for (int n=0;n<PHRASE_COUNT;n++) {
+		int i=(start+n)%PHRASE_COUNT ;
 		if (!isUsed_[i]) {
 			isUsed_[i]=true ;
 			return i ;

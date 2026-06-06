@@ -409,6 +409,19 @@ bool Player::IsRunning() {
 	return isRunning_ ;
 } ;
 
+void Player::PreviewNote(int channel,unsigned char instrument,unsigned char note) {
+	if (note==0xFF || note>=120) return ;
+	if (instrument==0xFF) return ;          // no instrument to sound
+	if (isRunning_) return ;                // don't disturb active playback
+	I_Instrument *i=project_->GetInstrumentBank()->GetInstrument(instrument) ;
+	if (!i) return ;
+	// The audio thread renders the channel buses continuously; lock around the
+	// trigger (it touches the bus child list / channel voice).
+	mixer_->Lock() ;
+	mixer_->PreviewInstrument(channel,i,note) ;
+	mixer_->Unlock() ;
+} ;
+
 bool Player::Clipped() {
      return mixer_->Clipped() ;
 }

@@ -68,6 +68,9 @@ public:
 	void OnSongStartButton(unsigned int from,unsigned int to,bool requestStop,bool forceImmediate) ;
 	
 	bool IsRunning() ;
+	// One-shot preview of a single note on a channel (M8-style step audition).
+	// No-op while the sequencer runs so it can't disturb playback.
+	void PreviewNote(int channel,unsigned char instrument,unsigned char note) ;
 	bool Clipped() ;
 	
 	void ProcessCommands() ;

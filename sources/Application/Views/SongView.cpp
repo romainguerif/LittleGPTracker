@@ -149,7 +149,8 @@ void SongView::clonePosition() {
     if (current == 255)
         return;
 
-    unsigned short next = viewData_->song_->chain_->GetNext();
+    // Clone to the NEXT free chain after the source (e.g. 60 -> 61), wrapping.
+    unsigned short next = viewData_->song_->chain_->GetNext(current + 1);
     if (next == NO_MORE_CHAIN)
         return;
 
