@@ -62,6 +62,12 @@ struct renderParams {
 	unsigned char lfoRate_ ;
 	unsigned char lfoDepth_ ;
 	unsigned char delaySend_ ; // per-voice delay send (FX-automatable via DSND)
+	// FX-automatable amplitude ADSR (per voice), seeded from the instrument at
+	// note trigger and modifiable by FX commands (AATK/ADEC/ASUS/AREL).
+	unsigned char ampAttack_ ;
+	unsigned char ampDecay_ ;
+	unsigned char ampSustain_ ;
+	unsigned char ampRelease_ ;
 	fixed attenuate_ ; // filter attenuate
 
 	unsigned char downsample_ ; // downsampling

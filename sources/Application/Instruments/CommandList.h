@@ -42,6 +42,11 @@
 #define I_CMD_LFOD MAKE_FOURCC('L','F','O','D')
 // Per-instrument delay send automation
 #define I_CMD_DSND MAKE_FOURCC('D','S','N','D')
+// Per-instrument amplitude ADSR envelope automation (per voice, like EQ/LFO)
+#define I_CMD_AATK MAKE_FOURCC('A','A','T','K')
+#define I_CMD_ADEC MAKE_FOURCC('A','D','E','C')
+#define I_CMD_ASUS MAKE_FOURCC('A','S','U','S')
+#define I_CMD_AREL MAKE_FOURCC('A','R','E','L')
 // Randomization
 #define I_CMD_PROB MAKE_FOURCC('P','R','O','B') // note probability (HH:LL = HH-in-LL)
 #define I_CMD_RPAN MAKE_FOURCC('R','P','A','N') // random pan spread

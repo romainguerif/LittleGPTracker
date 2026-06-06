@@ -3,6 +3,10 @@
 
 static FourCC _all[]= {
 	I_CMD_NONE,
+	I_CMD_AATK,
+	I_CMD_ADEC,
+	I_CMD_AREL,
+	I_CMD_ASUS,
 	I_CMD_ARPG,
 	I_CMD_CRSH,
 	I_CMD_DLAY,

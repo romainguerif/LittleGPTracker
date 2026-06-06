@@ -486,6 +486,11 @@ bool SampleInstrument::Start(int channel,unsigned char midinote,bool cleanstart)
 		rp->lfoRate_=lfoRate_->GetInt() ;
 		rp->lfoDepth_=lfoDepth_->GetInt() ;
 		rp->delaySend_=delaySend_->GetInt() ;
+	// Seed FX-automatable amplitude ADSR from the instrument
+		rp->ampAttack_=ampAttack_->GetInt() ;
+		rp->ampDecay_=ampDecay_->GetInt() ;
+		rp->ampSustain_=ampSustain_->GetInt() ;
+		rp->ampRelease_=ampRelease_->GetInt() ;
 
 	// Init downsampling
 
@@ -790,13 +795,13 @@ bool SampleInstrument::Render(int channel,fixed *buffer,int size,bool updateTick
 		// exponentially from one K-rate period (~2.3 ms, the declick floor) up to
 		// ~4 s. The increments are how much the 0..1 level moves each K-rate tick.
 		float ampKrateMs = 1000.0f * KRATE_SAMPLE_COUNT / 44100.0f ; // ~2.268 ms
-		float ampAtkMs = ampKrateMs * powf(4000.0f/ampKrateMs, ampAttack_->GetInt()/255.0f) ;
-		float ampDecMs = ampKrateMs * powf(4000.0f/ampKrateMs, ampDecay_->GetInt()/255.0f) ;
-		float ampRelMs = ampKrateMs * powf(4000.0f/ampKrateMs, ampRelease_->GetInt()/255.0f) ;
+		float ampAtkMs = ampKrateMs * powf(4000.0f/ampKrateMs, rp->ampAttack_/255.0f) ;
+		float ampDecMs = ampKrateMs * powf(4000.0f/ampKrateMs, rp->ampDecay_/255.0f) ;
+		float ampRelMs = ampKrateMs * powf(4000.0f/ampKrateMs, rp->ampRelease_/255.0f) ;
 		float ampAtkInc = ampKrateMs/ampAtkMs ; // level rise per K-rate tick
 		float ampDecInc = ampKrateMs/ampDecMs ; // level fall per K-rate tick
 		float ampRelInc = ampKrateMs/ampRelMs ;
-		float ampSus = ampSustain_->GetInt()/255.0f ; // sustain level 0..1
+		float ampSus = rp->ampSustain_/255.0f ; // sustain level 0..1
 
 		int count=size ; // number of samples to treat
 
@@ -1476,6 +1481,10 @@ void SampleInstrument::RefreshActiveVoiceParams() {
 		rp->lfoRate_=lfoRate_->GetInt() ;
 		rp->lfoDepth_=lfoDepth_->GetInt() ;
 		rp->delaySend_=delaySend_->GetInt() ;
+		rp->ampAttack_=ampAttack_->GetInt() ;
+		rp->ampDecay_=ampDecay_->GetInt() ;
+		rp->ampSustain_=ampSustain_->GetInt() ;
+		rp->ampRelease_=ampRelease_->GetInt() ;
 		rp->downsample_=downsample_->GetInt() ;
 	}
 }
@@ -1826,6 +1835,14 @@ void SampleInstrument::ProcessCommand(int channel,FourCC cc,ushort value) {
 			rp->lfoDepth_=(unsigned char)(value&0xFF) ; break ;
 		case I_CMD_DSND: // per-voice delay send
 			rp->delaySend_=(unsigned char)(value&0xFF) ; break ;
+		case I_CMD_AATK: // amp envelope attack
+			rp->ampAttack_=(unsigned char)(value&0xFF) ; break ;
+		case I_CMD_ADEC: // amp envelope decay
+			rp->ampDecay_=(unsigned char)(value&0xFF) ; break ;
+		case I_CMD_ASUS: // amp envelope sustain level
+			rp->ampSustain_=(unsigned char)(value&0xFF) ; break ;
+		case I_CMD_AREL: // amp envelope release
+			rp->ampRelease_=(unsigned char)(value&0xFF) ; break ;
 		case I_CMD_RPAN: { // random pan spread
 			int amt=(value&0xFF) ;
 			rp->basePan_ += i2fp(siRandSigned(amt/2)) ;
