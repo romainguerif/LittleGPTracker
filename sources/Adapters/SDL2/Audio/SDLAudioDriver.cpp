@@ -1,5 +1,6 @@
 #include "SDLAudioDriver.h"
 #include "Services/Midi/MidiService.h"
+#include "Services/Midi/MidiClock.h"
 #include "Services/Time/TimeService.h"
 #include "System/Console/Trace.h"
 #include "System/System/System.h"
@@ -225,6 +226,9 @@ void SDLAudioDriver::OnChunkDone(Uint8 *stream, int len) {
     // Now dump audio to the device
 
     SYS_MEMCPY(stream, (short *)(mainBuffer_ + bufferPos_), len);
+    // Audio<->MIDI clock: count frames leaving for the DAC (the "played" side).
+    // len bytes = len/4 stereo 16-bit frames.
+    MidiClock::GetInstance()->AdvancePlayed(len/4);
     onAudioBufferTick();
     bufferPos_ += len;
 }

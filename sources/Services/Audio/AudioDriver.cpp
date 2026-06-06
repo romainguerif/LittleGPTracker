@@ -3,6 +3,7 @@
 #include "System/System/System.h"
 #include "System/Console/Trace.h"
 #include "System/Console/n_assert.h"
+#include "Services/Midi/MidiClock.h"
 
 AudioDriver::AudioDriver(AudioSettings &settings) {
 	settings_=settings ;
@@ -40,6 +41,10 @@ bool AudioDriver::Start() {
     poolPlayPosition_=0 ;
 	hasData_=false ;
 
+	// Re-anchor the audio<->MIDI frame clock while the pool is empty (no in-flight
+	// audio) so produced/played start aligned. Device runs at 44100 (SDL input).
+	MidiClock::GetInstance()->Reset(44100) ;
+
     return StartDriver() ;
 };
 
@@ -54,6 +59,12 @@ void AudioDriver::AddBuffer(short *buffer,int samplecount) {
   int len=samplecount*2*sizeof(short) ;
 
   if (!isPlaying_) return ;
+
+  // Audio<->MIDI clock: count frames entering the playback pool (the "produced"
+  // side). Played frames are counted as the pool is consumed; produced-played =
+  // the in-flight latency, which the MIDI scheduler uses to emit MIDI exactly
+  // when the matching audio is heard.
+  MidiClock::GetInstance()->AdvanceProduced(samplecount) ;
 
   if (len>SOUND_BUFFER_MAX) {
       Trace::Error("Alert: buffer size exceeded") ;

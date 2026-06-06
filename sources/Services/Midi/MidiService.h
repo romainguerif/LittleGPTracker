@@ -28,6 +28,10 @@ class MidiService : public T_Factory<MidiService>,
 
     void SelectDevice(const std::string &name);
 
+    //! MIDI-out timing offset in ms (+ve = earlier). Applied to the active device's
+    //! precise scheduler; stored so it survives device (re)selection.
+    void SetMidiOutOffsetMs(int ms);
+
     I_Iterator<MidiInDevice> *GetInIterator();
 
     //! player notification
@@ -80,6 +84,8 @@ class MidiService : public T_Factory<MidiService>,
     int midiDelay_;
     int tickToFlush_;
     bool sendSync_;
+    bool playing_; // true between OnPlayerStart and OnPlayerStop (gates MIDI clock)
+    int midiOutOffsetFrames_; // precise-scheduler timing offset (audio frames)
     SysMutex queueMutex_;
 };
 #endif

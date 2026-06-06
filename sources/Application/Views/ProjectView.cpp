@@ -196,6 +196,14 @@ ProjectView::ProjectView(GUIWindow &w,ViewData *data):FieldView(w,data) {
                               MidiService::GetInstance()->Size(), 1, 1);
     T_SimpleList<UIField>::Insert(field);
 
+    // MIDI-out timing offset (ms): +ve sends MIDI earlier to align external gear
+    // with LGPT's audio. The audio-output latency itself is already compensated.
+    v = project_->FindVariable(VAR_MIDIOUTOFFSET);
+    NAssert(v);
+    position._y += 1;
+    field = new UIIntVarField(position, *v, "MIDI offset: %d ms", -200, 200, 1, 10);
+    T_SimpleList<UIField>::Insert(field);
+
     position._y += 2;
     v = project_->FindVariable(VAR_RENDER);
     NAssert(v);

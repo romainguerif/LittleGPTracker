@@ -82,6 +82,14 @@ tempoNudge_(0)
 	this->Insert(midi) ;
 	midi->AddObserver(*this) ;
 
+	// MIDI-out timing offset in ms. The internal audio-output latency is already
+	// compensated by the precise scheduler; this fine-tunes the residual (codec +
+	// external-device response). +ve = send MIDI earlier so the gear lands with
+	// LGPT's audio. Persisted per project; applied live on change.
+	WatchedVariable *midiOffset=new WatchedVariable("midioffset",VAR_MIDIOUTOFFSET,0) ;
+	this->Insert(midiOffset) ;
+	midiOffset->AddObserver(*this) ;
+
 
 	song_=new Song() ;
 	instrumentBank_=new InstrumentBank() ;
@@ -211,6 +219,9 @@ void Project::Update(Observable &o,I_ObservableData *d) {
                 midi->Close() ;
             }
  */           break ;
+		case VAR_MIDIOUTOFFSET:
+			MidiService::GetInstance()->SetMidiOutOffsetMs(v.GetInt()) ;
+			break ;
     }
 }
 

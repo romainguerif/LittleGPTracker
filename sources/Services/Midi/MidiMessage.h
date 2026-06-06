@@ -26,7 +26,8 @@ struct MidiMessage:public I_ObservableData
     unsigned char data2=UNUSED_BYTE)
   : status_(status),
     data1_(data1),
-    data2_(data2) 
+    data2_(data2),
+    stamp_(0)
   {
   };
   
@@ -43,4 +44,8 @@ struct MidiMessage:public I_ObservableData
 	unsigned char status_ ;
 	unsigned char data1_ ;
 	unsigned char data2_ ;
+	// Audio-frame at which this message should be HEARD (set at generation time
+	// from MidiClock::CurrentProduced). Used by the precise MIDI scheduler to send
+	// it the instant that frame is played. 0 = no timestamp (send immediately).
+	unsigned long long stamp_ ;
 };

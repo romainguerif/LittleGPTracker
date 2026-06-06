@@ -35,6 +35,10 @@
 #include "Adapters/RTMidi/RTMidiService.h"
 #endif
 
+#ifdef ALSAMIDI
+#include "Adapters/ALSAMidi/ALSAMidi.h"
+#endif
+
 #ifdef SDLAUDIO
 #include "Adapters/SDL2/Audio/SDLAudio.h"
 #endif
@@ -123,6 +127,11 @@ void LINUXSystem::Boot(int argc,char **argv) {
 #ifdef RTMIDI
 	Trace::Log("System","Installing RT MIDI") ;
 	MidiService::Install(new RTMidiService()) ;
+#endif
+
+#ifdef ALSAMIDI
+	Trace::Log("System","Installing ALSA rawmidi") ;
+	MidiService::Install(new ALSARawMidiService()) ;
 #endif
 
 	// Install Threads
