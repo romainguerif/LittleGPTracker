@@ -32,6 +32,11 @@ class MidiService : public T_Factory<MidiService>,
     //! precise scheduler; stored so it survives device (re)selection.
     void SetMidiOutOffsetMs(int ms);
 
+    //! Clock-only mode: when true, only system-realtime (clock 0xF8 + start/
+    //! continue/stop) is sent; note/CC/etc. are dropped. Lets LGPT drive external
+    //! gear as a clock slave without playing its sounds.
+    void SetClockOnly(bool on);
+
     I_Iterator<MidiInDevice> *GetInIterator();
 
     //! player notification
@@ -84,6 +89,7 @@ class MidiService : public T_Factory<MidiService>,
     int midiDelay_;
     int tickToFlush_;
     bool sendSync_;
+    bool clockOnly_; // true = send only clock/transport, drop notes/CC
     bool playing_; // true between OnPlayerStart and OnPlayerStop (gates MIDI clock)
     int midiOutOffsetFrames_; // precise-scheduler timing offset (audio frames)
     SysMutex queueMutex_;

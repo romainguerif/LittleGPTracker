@@ -204,6 +204,12 @@ ProjectView::ProjectView(GUIWindow &w,ViewData *data):FieldView(w,data) {
     field = new UIIntVarField(position, *v, "MIDI offset: %d ms", -200, 200, 1, 10);
     T_SimpleList<UIField>::Insert(field);
 
+    v = project_->FindVariable(VAR_MIDICLOCKONLY);
+    NAssert(v);
+    position._y += 1;
+    field = new UIIntVarField(position, *v, "MIDI send: %s", 0, 1, 1, 1);
+    T_SimpleList<UIField>::Insert(field);
+
     position._y += 2;
     v = project_->FindVariable(VAR_RENDER);
     NAssert(v);

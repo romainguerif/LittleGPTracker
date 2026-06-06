@@ -13,6 +13,7 @@
 #define VAR_WRAP        	MAKE_FOURCC('W', 'R', 'A', 'P')
 #define VAR_MIDIDEVICE  	MAKE_FOURCC('M', 'I', 'D', 'I')
 #define VAR_MIDIOUTOFFSET	MAKE_FOURCC('M', 'O', 'F', 'S')
+#define VAR_MIDICLOCKONLY	MAKE_FOURCC('M', 'C', 'L', 'K')
 #define VAR_TRANSPOSE   	MAKE_FOURCC('T', 'R', 'S', 'P')
 #define VAR_SOFTCLIP 		MAKE_FOURCC('S', 'F', 'T', 'C')
 #define VAR_SOFTCLIP_GAIN 	MAKE_FOURCC('S', 'F', 'G', 'N')

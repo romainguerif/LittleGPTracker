@@ -13,7 +13,7 @@
 
 MidiService::MidiService()
     : T_SimpleList<MidiOutDevice>(true), inList_(true), device_(0),
-      sendSync_(true), playing_(false) {
+      sendSync_(true), clockOnly_(false), playing_(false) {
     for (int i = 0; i < MIDI_MAX_BUFFERS; i++) {
         queues_[i] = new T_SimpleList<MidiMessage>(true);
     }
@@ -23,6 +23,11 @@ MidiService::MidiService()
     const char *sendSync = Config::GetInstance()->GetValue("MIDISENDSYNC");
     if (sendSync) {
         sendSync_ = (strcmp(sendSync, "YES") == 0);
+    }
+
+    const char *clockOnly = Config::GetInstance()->GetValue("MIDICLOCKONLY");
+    if (clockOnly) {
+        clockOnly_ = (strcmp(clockOnly, "YES") == 0);
     }
 
     // Default MIDI-out timing offset (ms) from config; the project field can also
@@ -72,8 +77,15 @@ bool MidiService::Start() {
 
 void MidiService::Stop() { stopDevice(); };
 
+void MidiService::SetClockOnly(bool on) { clockOnly_ = on; };
+
 void MidiService::QueueMessage(MidiMessage &m) {
     if (!device_) return;
+
+    // Clock-only mode: pass only system-realtime (status >= 0xF8 = clock 0xF8 +
+    // start/continue/stop FA/FB/FC); drop notes, CC, program change, etc. so we
+    // clock external gear without playing its sounds.
+    if (clockOnly_ && m.status_ < 0xF8) return;
 
     // Transport realtime (start/continue/stop) must go out PROMPTLY and reliably:
     // they're not melodic, and a frame-stamp would get STUCK at stop (audio pauses

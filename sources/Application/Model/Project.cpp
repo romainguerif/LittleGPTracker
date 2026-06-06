@@ -90,6 +90,12 @@ tempoNudge_(0)
 	this->Insert(midiOffset) ;
 	midiOffset->AddObserver(*this) ;
 
+	// MIDI send mode: 0 = notes + clock/transport (default), 1 = clock/transport
+	// only (drive external gear as a clock slave without playing its sounds).
+	WatchedVariable *midiSend=new WatchedVariable("midisend",VAR_MIDICLOCKONLY,(char**)midiSendStates,2,0) ;
+	this->Insert(midiSend) ;
+	midiSend->AddObserver(*this) ;
+
 
 	song_=new Song() ;
 	instrumentBank_=new InstrumentBank() ;
@@ -221,6 +227,9 @@ void Project::Update(Observable &o,I_ObservableData *d) {
  */           break ;
 		case VAR_MIDIOUTOFFSET:
 			MidiService::GetInstance()->SetMidiOutOffsetMs(v.GetInt()) ;
+			break ;
+		case VAR_MIDICLOCKONLY:
+			MidiService::GetInstance()->SetClockOnly(v.GetInt()!=0) ;
 			break ;
     }
 }
