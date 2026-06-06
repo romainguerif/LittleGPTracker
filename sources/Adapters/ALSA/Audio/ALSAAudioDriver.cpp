@@ -9,6 +9,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <dirent.h>
 #include <pthread.h>
 #include <sched.h>
 
@@ -40,33 +41,49 @@ void ALSAThread::RequestTermination() {
 
 // ---- device selection ------------------------------------------------------
 
-// Same /proc/asound/cards scan as the input probe: prefer the USB card so LGPT's
-// whole mix plays THROUGH the external gear (e.g. an Elektron Model:Samples).
-static int findUsbCard() {
+// Card index of a USB device that has an audio PLAYBACK PCM (real audio output,
+// e.g. an Elektron Model:Samples) -- NOT a USB-MIDI-only adapter (which shows up
+// as a USB card but has no playback) and NOT the internal codec. -1 if none.
+int alsaFindUsbPlaybackCard() {
+    bool usb[32];
+    for (int i = 0; i < 32; i++) usb[i] = false;
+
     int fd = open("/proc/asound/cards", O_RDONLY);
-    if (fd < 0)
-        return -1;
-    char buf[4096];
-    ssize_t n = read(fd, buf, sizeof(buf) - 1);
-    close(fd);
-    if (n <= 0)
-        return -1;
-    buf[n] = 0;
+    if (fd >= 0) {
+        char buf[4096];
+        ssize_t n = read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+        if (n > 0) {
+            buf[n] = 0;
+            char *line = buf;
+            while (line && *line) {
+                char *nl = strchr(line, '\n');
+                if (nl) *nl = 0;
+                int idx;
+                if (sscanf(line, " %d [", &idx) == 1 && idx >= 0 && idx < 32) {
+                    if ((strstr(line, "USB") || strstr(line, "usb")) &&
+                        !strstr(line, "audiocodec"))
+                        usb[idx] = true;
+                }
+                line = nl ? nl + 1 : 0;
+            }
+        }
+    }
+
+    // A USB card with a playback PCM node /dev/snd/pcmC<idx>D<n>p ('p' = playback).
+    DIR *d = opendir("/dev/snd");
     int found = -1;
-    char *line = buf;
-    while (line && *line) {
-        char *nl = strchr(line, '\n');
-        if (nl)
-            *nl = 0;
-        int idx;
-        if (sscanf(line, " %d [", &idx) == 1) {
-            if ((strstr(line, "USB") || strstr(line, "usb")) &&
-                !strstr(line, "audiocodec")) {
-                found = idx;
+    if (d) {
+        struct dirent *e;
+        while ((e = readdir(d)) != 0) {
+            int c, dev; char suf = 0;
+            if (sscanf(e->d_name, "pcmC%dD%d%c", &c, &dev, &suf) == 3 &&
+                suf == 'p' && c >= 0 && c < 32 && usb[c]) {
+                found = c;
                 break;
             }
         }
-        line = nl ? nl + 1 : 0;
+        closedir(d);
     }
     return found;
 }
@@ -86,11 +103,11 @@ bool ALSAAudioDriver::openPcm() {
         strncpy(dev, cfg, sizeof(dev) - 1);
         dev[sizeof(dev) - 1] = 0;
     } else {
-        int card = findUsbCard();
+        int card = alsaFindUsbPlaybackCard();
         if (card >= 0)
             snprintf(dev, sizeof(dev), "plughw:%d,0", card); // -> the USB gear
         else
-            strcpy(dev, "default"); // no USB device: internal codec
+            strcpy(dev, "default"); // no USB output: internal codec
     }
 
     // sunxi USB anti-glitch (same recipe that stabilised capture in M8Tape):

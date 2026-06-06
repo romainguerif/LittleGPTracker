@@ -11,6 +11,7 @@ DEFINES := \
 	-D_NO_JACK_ \
 	-DSDL2 \
         -DALSAAUDIO \
+        -DSDLAUDIO \
         -DALSAMIDI
 
 CROSS_COMPILE:=/usr/bin/aarch64-linux-gnu-

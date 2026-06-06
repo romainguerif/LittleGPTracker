@@ -3,6 +3,8 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
 #include "Adapters/SDL2/GUI/GUIFactory.h"
 #include "Adapters/SDL2/GUI/SDLEventManager.h"
 #include "Adapters/SDL2/GUI/SDLGUIWindowImp.h"
@@ -49,6 +51,19 @@
 
 EventManager *LINUXSystem::eventManager_ = NULL;
 static int secbase = 0;
+
+#if defined(ALSAAUDIO) && defined(SDLAUDIO)
+// Defined in ALSAAudioDriver.cpp: index of a USB card with an audio PLAYBACK PCM
+// (real output, e.g. Model:Samples) -- not a USB-MIDI-only adapter, not the codec.
+extern int alsaFindUsbPlaybackCard();
+// Decides the audio backend at boot: a USB AUDIO OUTPUT device present -> ALSA
+// direct (exact MIDI-latency sync, plays through the gear); otherwise the
+// original SDL/internal-codec path so the Trimui hardware volume buttons keep
+// working exactly as before. A USB-MIDI adapter alone does NOT trigger ALSA.
+static bool hasUsbAudioOutput() {
+	return alsaFindUsbPlaybackCard() >= 0;
+}
+#endif
 
 /*
  * starts the main loop
@@ -110,20 +125,37 @@ void LINUXSystem::Boot(int argc,char **argv) {
 	Audio::Install(new RTAudioStub(hints)) ;
 #endif
 
-#ifdef SDLAUDIO
-	Trace::Log("System","Installing SDL audio") ;
-	AudioSettings hint;
-	hint.bufferSize_ = 1024;
-	hint.preBufferCount_ = 8;
-	Audio::Install(new SDLAudio(hint));
-#endif
-
-#ifdef ALSAAUDIO
-	Trace::Log("System","Installing ALSA audio (direct, latency-synced MIDI)") ;
-	AudioSettings alsaHint;
-	alsaHint.bufferSize_ = 1024;
-	alsaHint.preBufferCount_ = 12; // extra pool cushion vs render spikes (crackle)
-	Audio::Install(new ALSAAudio(alsaHint));
+#if defined(ALSAAUDIO) && defined(SDLAUDIO)
+	if (hasUsbAudioOutput()) {
+		Trace::Log("System","Installing ALSA audio (USB gear, latency-synced MIDI)") ;
+		AudioSettings alsaHint;
+		alsaHint.bufferSize_ = 1024;
+		alsaHint.preBufferCount_ = 12; // pool cushion vs render spikes (crackle)
+		Audio::Install(new ALSAAudio(alsaHint));
+	} else {
+		// No USB gear: original SDL/internal-codec path (hardware volume works).
+		Trace::Log("System","Installing SDL audio (internal codec)") ;
+		AudioSettings hint;
+		hint.bufferSize_ = 1024;
+		hint.preBufferCount_ = 8;
+		Audio::Install(new SDLAudio(hint));
+	}
+#elif defined(ALSAAUDIO)
+	{
+		Trace::Log("System","Installing ALSA audio (direct, latency-synced MIDI)") ;
+		AudioSettings alsaHint;
+		alsaHint.bufferSize_ = 1024;
+		alsaHint.preBufferCount_ = 12;
+		Audio::Install(new ALSAAudio(alsaHint));
+	}
+#elif defined(SDLAUDIO)
+	{
+		Trace::Log("System","Installing SDL audio") ;
+		AudioSettings hint;
+		hint.bufferSize_ = 1024;
+		hint.preBufferCount_ = 8;
+		Audio::Install(new SDLAudio(hint));
+	}
 #endif
 
 #ifdef DUMMYMIDI
