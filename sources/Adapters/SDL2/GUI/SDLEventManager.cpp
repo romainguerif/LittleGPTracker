@@ -67,7 +67,7 @@ bool SDLEventManager::Init()
 	return true ;
 } 
 
-int SDLEventManager::MainLoop() 
+int SDLEventManager::MainLoop()
 {
 	GUIWindow *appWindow=Application::GetInstance()->GetWindow() ;
 	SDLGUIWindowImp *sdlWindow=(SDLGUIWindowImp *)appWindow->GetImpWindow() ;
